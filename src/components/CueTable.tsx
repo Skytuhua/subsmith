@@ -198,7 +198,9 @@ export function CueTable({
 }) {
   const doc = editor.state.doc!;
   const { selectedIds, setSelection } = editor;
-  const lastClick = useRef<number | null>(null);
+  // Anchor the shift-click range on a cue *id*, not an array index, so it stays correct
+  // after cues are reordered, deleted, merged, or undone.
+  const lastClick = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Virtualize the cue list so files with thousands of cues stay smooth: only the rows
@@ -237,7 +239,11 @@ export function CueTable({
       const cues = editor.state.doc!.cues;
       const id = cues[index].id;
       if (e.shiftKey && lastClick.current !== null) {
-        const [a, b] = [lastClick.current, index].sort((x, y) => x - y);
+        // Resolve the anchor id to its *current* index; fall back to this click if the
+        // anchored cue has since been removed.
+        const anchor = cues.findIndex((c) => c.id === lastClick.current);
+        const from = anchor === -1 ? index : anchor;
+        const [a, b] = [from, index].sort((x, y) => x - y);
         setSelection(
           cues.slice(a, b + 1).map((c) => c.id),
           index,
@@ -247,10 +253,10 @@ export function CueTable({
         if (next.has(id)) next.delete(id);
         else next.add(id);
         setSelection([...next], index);
-        lastClick.current = index;
+        lastClick.current = id;
       } else {
         setSelection([id], index);
-        lastClick.current = index;
+        lastClick.current = id;
       }
     },
     [editor, selectedIds, setSelection],
