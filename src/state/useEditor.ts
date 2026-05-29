@@ -256,20 +256,40 @@ export function useEditor(): EditorApi {
     [state.selection],
   );
 
-  return {
-    state,
-    canUndo: state.past.length > 0,
-    canRedo: state.future.length > 0,
-    selectedIds,
-    loadBytes,
-    loadText,
-    apply,
-    setDoc,
-    redecode,
-    setExportFormat,
-    setSelection,
-    undo,
-    redo,
-    clear,
-  };
+  // Memoize the API object so its identity is stable whenever neither `state` nor the
+  // selection changed (e.g. a no-op dispatch that returns the same state reference). All
+  // the members are already stable useCallbacks; this lets consumers bail out of re-renders
+  // and avoids re-subscribing effects that depend on the editor object.
+  return useMemo(
+    () => ({
+      state,
+      canUndo: state.past.length > 0,
+      canRedo: state.future.length > 0,
+      selectedIds,
+      loadBytes,
+      loadText,
+      apply,
+      setDoc,
+      redecode,
+      setExportFormat,
+      setSelection,
+      undo,
+      redo,
+      clear,
+    }),
+    [
+      state,
+      selectedIds,
+      loadBytes,
+      loadText,
+      apply,
+      setDoc,
+      redecode,
+      setExportFormat,
+      setSelection,
+      undo,
+      redo,
+      clear,
+    ],
+  );
 }

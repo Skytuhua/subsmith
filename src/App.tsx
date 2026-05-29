@@ -36,7 +36,10 @@ function Workbench() {
     editor.loadText(DEMO_SRT, DEMO_FILENAME, "srt");
   }, [editor]);
 
-  // Global undo/redo keyboard shortcuts.
+  // Global undo/redo keyboard shortcuts. undo/redo are stable useCallbacks, so the listener
+  // is attached once for the session instead of being torn down and re-added on every
+  // editor state change.
+  const { undo, redo } = editor;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
@@ -44,15 +47,15 @@ function Workbench() {
       const key = e.key.toLowerCase();
       if (key === "z" && !e.shiftKey) {
         e.preventDefault();
-        editor.undo();
+        undo();
       } else if ((key === "z" && e.shiftKey) || key === "y") {
         e.preventDefault();
-        editor.redo();
+        redo();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editor]);
+  }, [undo, redo]);
 
   if (!editor.state.doc) {
     return <Landing onFiles={openFiles} onDemo={loadDemo} />;
