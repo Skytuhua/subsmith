@@ -4,6 +4,8 @@ import { Scissors, Trash2, Copy, Plus } from "lucide-react";
 import type { Cue, Subtitle } from "../core/types";
 import { formatSrt, parseTimecode } from "../core/time";
 import { nextId } from "../core/id";
+import { readingSpeedCps } from "../core/reading";
+import { DEFAULT_THRESHOLDS } from "../core/lint";
 import type { EditorApi } from "../state/useEditor";
 import { cn } from "../lib/cn";
 import { IconButton } from "./ui";
@@ -104,6 +106,10 @@ const CueRow = memo(function CueRow({
   const [text, setText] = useState<string | null>(null);
   const duration = cue.end - cue.start;
   const negative = duration <= 0;
+  // Reading speed (chars/sec) — surfaces the same metric the lint "fast-reading" rule uses,
+  // inline per cue, for the readability-conscious (fansubbers, translators, learners).
+  const cps = negative ? 0 : readingSpeedCps(cue.text, duration);
+  const fast = cps > DEFAULT_THRESHOLDS.maxCps;
 
   return (
     <div
@@ -155,6 +161,17 @@ const CueRow = memo(function CueRow({
         >
           {negative ? "invalid" : `${(duration / 1000).toFixed(2)}s`}
         </span>
+        {cps > 0 && (
+          <span
+            className={cn(
+              "px-1 font-mono text-[11px] tabular-nums",
+              fast ? "text-warning" : "text-muted-fg/40",
+            )}
+            title={`${Math.round(cps)} characters/second${fast ? " — reads fast" : ""}`}
+          >
+            {Math.round(cps)} cps
+          </span>
+        )}
       </div>
 
       {/* Text. */}

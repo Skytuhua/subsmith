@@ -1,5 +1,6 @@
 import type { Subtitle } from "./types";
 import { sortByTime, removeEmpty } from "./transforms/text";
+import { visibleLength, readingSpeedCps } from "./reading";
 
 export type LintSeverity = "error" | "warning" | "info";
 export type LintRule =
@@ -30,15 +31,6 @@ export const DEFAULT_THRESHOLDS: LintThresholds = {
   maxDurationMs: 7000,
   maxCps: 25,
 };
-
-/** Visible-character count (tags/whitespace excluded) for reading-speed estimates. */
-function visibleLength(text: string): number {
-  return text
-    .replace(/\{[^}]*\}/g, "")
-    .replace(/<[^>]*>/g, "")
-    .replace(/\s+/g, " ")
-    .trim().length;
-}
 
 /** Run all validation rules over a subtitle, returning ordered findings. */
 export function lint(
@@ -95,7 +87,7 @@ export function lint(
           message: `Cue ${i + 1} stays up ${(dur / 1000).toFixed(1)} s (over ${(thresholds.maxDurationMs / 1000).toFixed(0)} s).`,
         });
       }
-      const cps = visibleLength(c.text) / (dur / 1000);
+      const cps = readingSpeedCps(c.text, dur);
       if (cps > thresholds.maxCps && visibleLength(c.text) > 10) {
         findings.push({
           rule: "fast-reading",
