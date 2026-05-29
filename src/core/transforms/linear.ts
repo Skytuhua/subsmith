@@ -1,9 +1,9 @@
-import type { Subtitle } from '../types'
-import { applyLinearTransform, type CuePredicate } from './common'
+import type { Subtitle } from "../types";
+import { applyLinearTransform, type CuePredicate } from "./common";
 
 export interface LinearTransform {
-  a: number
-  b: number
+  a: number;
+  b: number;
 }
 
 /**
@@ -19,10 +19,10 @@ export function computeLinear(
   t2Old: number,
   t2New: number,
 ): LinearTransform | null {
-  if (t1Old === t2Old) return null
-  const a = (t2New - t1New) / (t2Old - t1Old)
-  const b = t1New - a * t1Old
-  return { a, b }
+  if (t1Old === t2Old) return null;
+  const a = (t2New - t1New) / (t2Old - t1Old);
+  const b = t1New - a * t1Old;
+  return { a, b };
 }
 
 /** Apply a previously computed linear transform to matching cues. */
@@ -31,7 +31,7 @@ export function applyLinear(
   transform: LinearTransform,
   predicate?: CuePredicate,
 ): Subtitle {
-  return applyLinearTransform(sub, transform.a, transform.b, predicate)
+  return applyLinearTransform(sub, transform.a, transform.b, predicate);
 }
 
 /** Convenience: compute then apply a two-point sync across matching cues. */
@@ -43,7 +43,7 @@ export function twoPointSync(
   t2New: number,
   predicate?: CuePredicate,
 ): Subtitle | null {
-  const t = computeLinear(t1Old, t1New, t2Old, t2New)
-  if (!t) return null
-  return applyLinear(sub, t, predicate)
+  const t = computeLinear(t1Old, t1New, t2Old, t2New);
+  if (!t) return null;
+  return applyLinear(sub, t, predicate);
 }
