@@ -6,6 +6,7 @@ import {
   FolderOpen,
   Eye,
   ChevronDown,
+  X,
 } from "lucide-react";
 import type { EditorApi } from "../state/useEditor";
 import type { SubtitleFormat } from "../core/types";
@@ -103,6 +104,10 @@ export function Header({
           )}
         </Dropzone>
 
+        <IconButton label="Close file" onClick={editor.clear}>
+          <X className="h-4 w-4" aria-hidden />
+        </IconButton>
+
         <ExportMenu editor={editor} />
       </div>
     </header>
@@ -114,6 +119,9 @@ function ExportMenu({ editor }: { editor: EditorApi }) {
   const [open, setOpen] = useState(false);
   const [bom, setBom] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const firstFieldRef = useRef<HTMLSelectElement>(null);
+  const wasOpen = useRef(false);
   const format = editor.state.exportFormat;
 
   useEffect(() => {
@@ -133,6 +141,14 @@ function ExportMenu({ editor }: { editor: EditorApi }) {
     };
   }, [open]);
 
+  // Move focus into the dialog on open and restore it to the trigger on close, so
+  // keyboard/SR users land inside the popover and return to where they were.
+  useEffect(() => {
+    if (open) firstFieldRef.current?.focus();
+    else if (wasOpen.current) triggerRef.current?.focus();
+    wasOpen.current = open;
+  }, [open]);
+
   const doDownload = () => {
     const doc = editor.state.doc;
     if (!doc) return;
@@ -145,6 +161,7 @@ function ExportMenu({ editor }: { editor: EditorApi }) {
   return (
     <div className="relative" ref={ref}>
       <Button
+        ref={triggerRef}
         variant="primary"
         icon={<Download className="h-4 w-4" aria-hidden />}
         onClick={() => setOpen((o) => !o)}
@@ -165,6 +182,7 @@ function ExportMenu({ editor }: { editor: EditorApi }) {
               Format
             </span>
             <Select
+              ref={firstFieldRef}
               value={format}
               onChange={(e) =>
                 editor.setExportFormat(e.target.value as SubtitleFormat)
