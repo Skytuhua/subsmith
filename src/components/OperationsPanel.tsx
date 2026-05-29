@@ -423,7 +423,26 @@ function FindReplacePanel({ editor, predicate }: PanelProps) {
       worker.terminate();
       workerRef.current = null;
       setBusy(false);
-      commit(ev.data);
+      const res = ev.data as { subtitle: Subtitle; count: number; error?: string };
+      if (res.error) {
+        notify(`Invalid regular expression: ${res.error}`, "error");
+        return;
+      }
+      if (res.count === 0) {
+        notify("No matches found.", "info");
+        return;
+      }
+      // The pattern is now proven non-catastrophic, so re-run it synchronously against the
+      // LIVE document via editor.apply. This preserves any edits the user made while the
+      // worker was running, instead of overwriting them with the stale snapshot the worker
+      // computed from.
+      editor.apply(
+        (d) =>
+          findReplace(d, find, replace, { regex: true, caseSensitive, predicate })
+            .subtitle,
+        `Replace "${find}"`,
+      );
+      notify(`Replaced ${res.count} occurrence${res.count === 1 ? "" : "s"}.`);
     };
     worker.onerror = () => {
       window.clearTimeout(timer);
