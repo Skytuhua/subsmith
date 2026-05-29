@@ -87,19 +87,21 @@ describe("ASS robustness", () => {
     expect(again.cues[0].ass?.style).toBe("Default");
   });
 
-  it("does not corrupt a comma in dialogue when Text is not last (canonicalizes)", () => {
+  it("does not corrupt a comma in dialogue when Text is not last", () => {
     const ass = [
       "[Events]",
       "Format: Start, End, Text, Style",
       "Dialogue: 0:00:01.00,0:00:02.00,Hello, world,Default",
     ].join("\n");
-    // Parsing a non-standard (Text-not-last) line is inherently ambiguous, but exporting
-    // then re-importing must be stable and lossless from then on.
+    // Only Text can hold commas in ASS, so the parser must read the FIRST parse correctly,
+    // even with a non-standard Text-not-last Format line.
     const first = parseAss(ass).subtitle;
+    expect(first.cues[0].text).toBe("Hello, world");
+    expect(first.cues[0].ass?.style).toBe("Default");
+    // …and it stays lossless across export (which canonicalizes Text to last) + re-import.
     const round = parseAss(serializeAss(first)).subtitle;
-    const round2 = parseAss(serializeAss(round)).subtitle;
-    expect(round2.cues[0].text).toBe(round.cues[0].text);
-    expect(round2.cues[0].ass?.style).toBe(round.cues[0].ass?.style);
+    expect(round.cues[0].text).toBe("Hello, world");
+    expect(round.cues[0].ass?.style).toBe("Default");
   });
 
   it("keeps commas inside the final text field", () => {

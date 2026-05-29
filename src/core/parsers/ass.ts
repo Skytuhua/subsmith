@@ -23,25 +23,25 @@ export const DEFAULT_ASS_EVENT_FORMAT = [
 ];
 
 /**
- * Split an event's field string into exactly `count` fields. Every field except the
- * last is delimited by a comma; the final field (the dialogue text) keeps any commas
- * it contains, per the ASS spec.
+ * Split an event's field string into fields aligned to `format`. In ASS only the `Text`
+ * field may contain commas, so any commas beyond the field count belong to `Text` — we make
+ * the `Text` column (wherever it sits, not merely the last position) the comma-bearing
+ * catch-all. This parses non-standard "Text-not-last" Format lines correctly too.
  */
-function splitFields(rest: string, count: number): string[] {
-  const out: string[] = [];
-  let idx = 0;
-  for (let k = 0; k < count - 1; k += 1) {
-    const c = rest.indexOf(",", idx);
-    if (c === -1) {
-      out.push(rest.slice(idx));
-      while (out.length < count) out.push("");
-      return out;
-    }
-    out.push(rest.slice(idx, c));
-    idx = c + 1;
+function splitFields(rest: string, format: string[]): string[] {
+  const count = format.length;
+  const parts = rest.split(",");
+  if (parts.length <= count) {
+    while (parts.length < count) parts.push("");
+    return parts;
   }
-  out.push(rest.slice(idx));
-  return out;
+  const textIdx = format.indexOf("text");
+  const ti = textIdx === -1 ? count - 1 : textIdx;
+  const numAfter = count - ti - 1;
+  const before = parts.slice(0, ti);
+  const after = numAfter > 0 ? parts.slice(parts.length - numAfter) : [];
+  const text = parts.slice(ti, parts.length - numAfter).join(",");
+  return [...before, text, ...after];
 }
 
 /**
@@ -112,7 +112,7 @@ export function parseAss(input: string): ParseResult {
   }
 
   for (const raw of rawEvents) {
-    const fields = splitFields(raw.rest, format.length);
+    const fields = splitFields(raw.rest, format);
     const startStr = fields[startIdx === -1 ? 1 : startIdx] ?? "";
     const endStr = fields[endIdx === -1 ? 2 : endIdx] ?? "";
     const start = parseTimecode(startStr);

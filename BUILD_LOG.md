@@ -95,3 +95,29 @@ is reconstructable after the fact. Newest entries at the bottom of each phase.
 - **Improvement (privacy/offline):** removed the Google Fonts CDN `@import` (a third-party
   request that contradicted the "nothing leaves your device" promise) and self-hosted Inter +
   JetBrains Mono via `@fontsource`. Re-verified: console now reports zero errors/requests.
+
+## Phase 5 — Review (continued) & convergence
+
+- Ran two independent reviewer subagents (code-quality/security, adversarial robustness) plus an
+  independent **verifier** subagent that re-ran every reported defect's repro against the fixed code.
+- Code-quality pass: confirmed no XSS/HTML-injection, correct object-URL lifecycle, zero `any`.
+  Fixed: ReDoS (regex find&replace moved to a Web Worker with a 3s timeout), reducer purity
+  (id-gen moved out of the reducer), adaptive undo-history depth, a11y (file-input labels),
+  de-duped TIMING_RE/normalize/truncate, THIRD_PARTY_NOTICES for jschardet LGPL.
+- Adversarial pass: fixed `fixOverlaps` (equal-start/contained), SRT interior-blank-line
+  round-trip, `$n` backreference, and ASS `Comment` leakage on conversion.
+- **Verifier convergence:** the verifier flagged that the ASS comma fix was only half-done (the
+  parser still mis-split a Text-not-last line on first parse). Fixed `splitFields` to make `Text`
+  the comma catch-all wherever it appears. Re-verified: 74/74 tests incl. the strengthened
+  first-parse assertion.
+- Visual: fixed an export-menu stacking-context bug (header `relative z-30`).
+- Performance: virtualized the cue list (`@tanstack/react-virtual`): 5000-cue load 2100ms→169ms,
+  shift 30s-freeze→65ms.
+- Accessibility: axe-core reports 0 WCAG 2A/2AA violations on landing + editor.
+
+## Phase 6 — Documentation & packaging
+
+- Strong `README.md` (problem, features, screenshots, install/usage, limitations, license),
+  `CHANGELOG.md` (1.0.0), `THIRD_PARTY_NOTICES.md`. Screenshots in `docs/screenshots/`.
+- Built static `dist/` and packaged `subsmith-dist.zip`; verified it loads + runs the demo from a
+  clean unzip over a plain static server (no console errors).

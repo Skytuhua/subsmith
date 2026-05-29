@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Build artifact (attached to releases, not committed)
+subsmith-dist.zip

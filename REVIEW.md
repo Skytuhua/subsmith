@@ -40,9 +40,13 @@ find&replace (literal + regex) → clean-up → merge → validate + jump-to-cue
 
 ### Data integrity (from the adversarial pass)
 4. **ASS round-trip corrupted a comma in dialogue when `Text` wasn't the last Format field**
-   (silent mangling). **Fix:** the serializer canonicalizes `Text` to the last field and
-   rewrites the `[Events]` `Format:` line to match, so output is always lossless; the parser
-   warns on non-standard order. Regression tests added.
+   (silent mangling). **Fix (two parts, after adversarial convergence):** the serializer
+   canonicalizes `Text` to the last field and rewrites the `[Events]` `Format:` line to match.
+   An independent **verifier subagent then caught that this alone was insufficient** — the
+   *parser* still mis-split the first parse — so the parser's `splitFields` was changed to make
+   the `Text` column the comma-bearing catch-all wherever it sits (valid because only `Text` may
+   contain commas in ASS). Now even a non-standard `Text`-not-last file parses losslessly on the
+   first read. Regression test asserts the exact first-parse values.
 5. **`fixOverlaps` left overlaps for equal-start / fully-contained cues** (an auto-fixer that
    didn't fully fix). **Fix:** sort first and clamp each cue's end to the next cue's start, so
    all overlaps are removed (a degenerate zero-length cue may remain, which the
