@@ -46,6 +46,19 @@ describe("lint", () => {
     expect(f.some((x) => x.rule === "out-of-order")).toBe(true);
   });
 
+  it("detects an overlap even when the cues are out of order", () => {
+    // Cue b precedes AND overlaps cue a, but appears second in the array. The old
+    // "compare to the array-previous cue" check missed this; the sorted sweep catches it.
+    const f = lint(
+      sub([
+        [2000, 5000, "a"],
+        [1000, 3000, "b"],
+      ]),
+    );
+    expect(f.some((x) => x.rule === "out-of-order")).toBe(true);
+    expect(f.some((x) => x.rule === "overlap")).toBe(true);
+  });
+
   it("flags empty text", () => {
     const f = lint(sub([[1000, 2000, "   "]]));
     expect(f.some((x) => x.rule === "empty-text")).toBe(true);
