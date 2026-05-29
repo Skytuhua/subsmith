@@ -146,6 +146,9 @@ const CueRow = memo(function CueRow({
           setText(null);
         }}
         className={cn(
+          // On mobile the grid is 2 cols, so span both to avoid being squeezed into the
+          // index column; on sm+ it's the dedicated text column.
+          "col-span-2 col-start-1 sm:col-span-1 sm:col-start-3",
           "min-h-[1.9rem] w-full resize-none rounded-sm border border-transparent bg-transparent px-2 py-1 text-sm leading-snug text-foreground",
           "transition-colors duration-150 hover:border-border/60 focus:border-accent focus:bg-background/40",
         )}

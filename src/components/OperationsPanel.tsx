@@ -361,26 +361,21 @@ function FindReplacePanel({ editor, predicate }: PanelProps) {
 
   const run = () => {
     if (find === "") return;
-    let count = 0;
-    let err: string | undefined;
-    editor.apply((d) => {
-      const res = findReplace(d, find, replace, {
-        regex,
-        caseSensitive,
-        predicate,
-      });
-      count = res.count;
-      err = res.error;
-      return res.subtitle;
-    }, `Replace "${find}"`);
-    if (err) notify(`Invalid regular expression: ${err}`, "error");
-    else
-      notify(
-        count > 0
-          ? `Replaced ${count} occurrence${count === 1 ? "" : "s"}.`
-          : "No matches found.",
-        count > 0 ? "success" : "info",
-      );
+    const doc = editor.state.doc;
+    if (!doc) return;
+    // Compute against the live document so we can report the real count and surface regex
+    // errors synchronously, then commit the concrete result (no undo step on a no-op).
+    const res = findReplace(doc, find, replace, { regex, caseSensitive, predicate });
+    if (res.error) {
+      notify(`Invalid regular expression: ${res.error}`, "error");
+      return;
+    }
+    if (res.count === 0) {
+      notify("No matches found.", "info");
+      return;
+    }
+    editor.setDoc(res.subtitle, `Replace "${find}"`);
+    notify(`Replaced ${res.count} occurrence${res.count === 1 ? "" : "s"}.`);
   };
 
   return (
