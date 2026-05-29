@@ -1,6 +1,5 @@
 import {
   forwardRef,
-  useId,
   useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
@@ -197,14 +196,14 @@ export function Panel({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const id = useId();
   return (
     <section className="overflow-hidden rounded-lg border border-white/[0.06] bg-card">
       <h3>
         <button
           type="button"
+          // aria-expanded alone is sufficient for an accordion (WAI-ARIA APG); we avoid
+          // aria-controls so it never dangles at a not-yet-rendered content region.
           aria-expanded={open}
-          aria-controls={id}
           onClick={() => setOpen((o) => !o)}
           className={cn(
             "flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-3 text-left",
@@ -226,10 +225,7 @@ export function Panel({
         </button>
       </h3>
       {open && (
-        <div
-          id={id}
-          className="space-y-3 border-t border-white/[0.06] px-3.5 py-3.5"
-        >
+        <div className="space-y-3 border-t border-white/[0.06] px-3.5 py-3.5">
           {children}
         </div>
       )}
