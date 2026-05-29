@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { Cue, Subtitle } from "../types";
 import { shift } from "./shift";
 import { computeLinear, twoPointSync } from "./linear";
-import { applyFramerate, fpsFactor } from "./framerate";
+import { applyFramerate, fpsFactor, matchFpsRatio } from "./framerate";
 import { applyScale } from "./scale";
 import {
   findReplace,
@@ -90,6 +90,14 @@ describe("framerate conversion", () => {
   it("is a no-op when from === to", () => {
     const input = sub([[1000, 2000, "a"]]);
     expect(applyFramerate(input, 25, 25)).toBe(input);
+  });
+  it("matchFpsRatio recognizes a standard sync factor", () => {
+    const m = matchFpsRatio(25 / 23.976); // the factor a two-point 25->23.976 sync yields
+    expect(m?.from).toBe(25);
+    expect(m?.to).toBe(23.976);
+  });
+  it("matchFpsRatio returns null for a pure offset (factor ~1)", () => {
+    expect(matchFpsRatio(1)).toBeNull();
   });
 });
 

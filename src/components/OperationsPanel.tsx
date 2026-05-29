@@ -14,7 +14,11 @@ import {
 import type { CuePredicate } from "../core/transforms/common";
 import { shift } from "../core/transforms/shift";
 import { computeLinear, applyLinear } from "../core/transforms/linear";
-import { FPS_PRESETS, applyFramerate } from "../core/transforms/framerate";
+import {
+  FPS_PRESETS,
+  applyFramerate,
+  matchFpsRatio,
+} from "../core/transforms/framerate";
 import { applyScale } from "../core/transforms/scale";
 import {
   findReplace,
@@ -203,8 +207,12 @@ function SyncPanel({ editor, predicate }: PanelProps) {
       return;
     }
     editor.apply((d) => applyLinear(d, t, predicate), "Two-point sync");
+    // If the solved speed factor matches a standard frame-rate ratio, say so — it turns an
+    // opaque number into an explainable, reusable conversion.
+    const fps = matchFpsRatio(t.a);
     notify(
-      `Synced ${scopeCount(editor, predicate)} (speed ×${t.a.toFixed(4)})`,
+      `Synced ${scopeCount(editor, predicate)} (speed ×${t.a.toFixed(4)})` +
+        (fps ? ` — matches a ${fps.label} conversion` : ""),
     );
     setNew1("");
     setNew2("");
