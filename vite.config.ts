@@ -8,6 +8,11 @@ export default defineConfig({
   // (e.g. GitHub Pages project sites or a downloaded zip opened via file://).
   base: './',
   plugins: [react()],
+  build: {
+    // jschardet ships sizeable charset models; the gzipped bundle (~200 kB) is fine for a
+    // tool that loads once and runs entirely offline thereafter.
+    chunkSizeWarningLimit: 700,
+  },
   test: {
     globals: true,
     environment: 'jsdom',

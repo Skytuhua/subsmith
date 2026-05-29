@@ -7,7 +7,7 @@ import type {
 } from "../types";
 import { parseTimecode } from "../time";
 import { nextId } from "../id";
-import { normalize } from "./srt";
+import { normalize } from "./shared";
 
 export const DEFAULT_ASS_EVENT_FORMAT = [
   "layer",
@@ -104,6 +104,11 @@ export function parseAss(input: string): ParseResult {
     warnings.push({
       message: "ASS [Events] Format is missing Start/End/Text; using defaults.",
     });
+  } else if (textIdx !== format.length - 1) {
+    warnings.push({
+      message:
+        "ASS Format lists Text before other fields (non-standard); commas in dialogue may be ambiguous. Text will be written last on export.",
+    });
   }
 
   for (const raw of rawEvents) {
@@ -173,7 +178,7 @@ function pick(
   return fields[i].trim();
 }
 
-function formatTitleCase(format: string[]): string[] {
+export function formatTitleCase(format: string[]): string[] {
   const map: Record<string, string> = {
     layer: "Layer",
     start: "Start",

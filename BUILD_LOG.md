@@ -64,3 +64,34 @@ is reconstructable after the fact. Newest entries at the bottom of each phase.
 - **Step 5 synthesize:** wrote `DESIGN_NOTES.md` in my own words; enriched `MASTER.md` is the
   canonical contract. Gate 3.5 PASS.
 - No skill files copied into the repo; no attribution to the generator anywhere (per spec).
+
+## Phase 4 — Build (summary)
+
+- Core engine (`src/core/`): pure, framework-free — `time`, `types`, `id`, parsers (srt/vtt/ass +
+  content detection), serializers (with ASS-override stripping on downgrade), transforms
+  (shift, two-point linear sync, framerate, scale, text ops, merge), `lint` + auto-fixers,
+  `detect` (jschardet + TextDecoder, 21 encodings), `mojibake`. 53 unit tests, all green.
+- State (`src/state/useEditor.ts`): reducer store with undo/redo (100-deep), selection,
+  encoding re-decode. Transforms run inside the reducer (APPLY) against the live doc — no refs.
+- UI (`src/components/`): Landing (empty state), Header (+ Export menu + encoding switch),
+  CueTable (inline edit, multi-select, split/merge/dup/delete, content-visibility rows),
+  OperationsPanel (Shift, Two-point sync, Frame-rate, Scale, Find&replace, Clean-up, Merge,
+  Validate), PreviewPlayer (virtual scrubber + optional local-video overlay), StatusBar, Toast.
+- Design fidelity: slate/green tokens, Inter + JetBrains Mono, SVG (Lucide) icons, focus ring,
+  reduced-motion, responsive — implemented to `design-system/MASTER.md`.
+
+## Phase 5 — Review (in progress)
+
+- Functional review via Playwright (real Chromium) across 12 flows + 4 breakpoints. The full
+  demo→shift→sync→find/replace→validate→preview→export→undo path works; 8 cues render.
+- **Bug found & fixed (functional):** find&replace toast reported "No matches found" though the
+  text changed — because the transform ran inside the reducer (deferred) while the count was
+  read synchronously. Fixed by computing find&replace against the live `doc` in the component
+  and committing the concrete result via `setDoc` (also avoids a no-op undo entry). Re-verified:
+  now reports "Replaced 7 occurrences."
+- **Bug found & fixed (responsive):** at 375px the cue text column collapsed into the 2.5rem
+  index column (grid auto-placement). Fixed by spanning the textarea full-width on mobile
+  (`col-span-2 col-start-1 sm:col-span-1 sm:col-start-3`). Re-verified on mobile screenshot.
+- **Improvement (privacy/offline):** removed the Google Fonts CDN `@import` (a third-party
+  request that contradicted the "nothing leaves your device" promise) and self-hosted Inter +
+  JetBrains Mono via `@fontsource`. Re-verified: console now reports zero errors/requests.

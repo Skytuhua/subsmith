@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Clock,
   Wand2,
@@ -44,7 +44,13 @@ import { Button, Field, Panel, TextInput, Select, Badge } from "./ui";
 import { Dropzone } from "./Dropzone";
 import { cn } from "../lib/cn";
 
-export function OperationsPanel({ editor }: { editor: EditorApi }) {
+export function OperationsPanel({
+  editor,
+  onJumpTo,
+}: {
+  editor: EditorApi;
+  onJumpTo: (index: number) => void;
+}) {
   const hasSelection = editor.selectedIds.size > 0;
   const [scoped, setScoped] = useState(false);
   // Derive the effective scope so we never need to reset state from an effect.
@@ -88,7 +94,7 @@ export function OperationsPanel({ editor }: { editor: EditorApi }) {
       <FindReplacePanel editor={editor} predicate={predicate} />
       <CleanupPanel editor={editor} predicate={predicate} />
       <MergePanel editor={editor} />
-      <LintPanel editor={editor} />
+      <LintPanel editor={editor} onJumpTo={onJumpTo} />
     </div>
   );
 }
@@ -182,6 +188,13 @@ function SyncPanel({ editor, predicate }: PanelProps) {
     if (!t) {
       notify(
         "The two anchor lines must have different original times.",
+        "error",
+      );
+      return;
+    }
+    if (t.a <= 0) {
+      notify(
+        "Those corrected times are reversed — they'd run the subtitles backwards. Check the values.",
         "error",
       );
       return;
@@ -358,14 +371,13 @@ function FindReplacePanel({ editor, predicate }: PanelProps) {
   const [replace, setReplace] = useState("");
   const [regex, setRegex] = useState(false);
   const [caseSensitive, setCaseSensitive] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const workerRef = useRef<Worker | null>(null);
 
-  const run = () => {
-    if (find === "") return;
-    const doc = editor.state.doc;
-    if (!doc) return;
-    // Compute against the live document so we can report the real count and surface regex
-    // errors synchronously, then commit the concrete result (no undo step on a no-op).
-    const res = findReplace(doc, find, replace, { regex, caseSensitive, predicate });
+  // Terminate any in-flight worker if the panel unmounts.
+  useEffect(() => () => workerRef.current?.terminate(), []);
+
+  const commit = (res: { subtitle: Subtitle; count: number; error?: string }) => {
     if (res.error) {
       notify(`Invalid regular expression: ${res.error}`, "error");
       return;
@@ -376,6 +388,57 @@ function FindReplacePanel({ editor, predicate }: PanelProps) {
     }
     editor.setDoc(res.subtitle, `Replace "${find}"`);
     notify(`Replaced ${res.count} occurrence${res.count === 1 ? "" : "s"}.`);
+  };
+
+  const run = () => {
+    if (find === "" || busy) return;
+    const doc = editor.state.doc;
+    if (!doc) return;
+
+    // Literal replace is linear-time and safe — run it inline against the live document.
+    if (!regex) {
+      commit(findReplace(doc, find, replace, { regex: false, caseSensitive, predicate }));
+      return;
+    }
+
+    // A user-supplied regex can backtrack catastrophically, so run it in a Web Worker and
+    // abandon it after a timeout rather than freezing the tab.
+    setBusy(true);
+    const worker = new Worker(
+      new URL("../workers/replace.worker.ts", import.meta.url),
+      { type: "module" },
+    );
+    workerRef.current = worker;
+    const timer = window.setTimeout(() => {
+      worker.terminate();
+      workerRef.current = null;
+      setBusy(false);
+      notify(
+        "That pattern is too slow (it may be backtracking catastrophically). Simplify it.",
+        "error",
+      );
+    }, 3000);
+    worker.onmessage = (ev: MessageEvent) => {
+      window.clearTimeout(timer);
+      worker.terminate();
+      workerRef.current = null;
+      setBusy(false);
+      commit(ev.data);
+    };
+    worker.onerror = () => {
+      window.clearTimeout(timer);
+      worker.terminate();
+      workerRef.current = null;
+      setBusy(false);
+      notify("Find & replace failed.", "error");
+    };
+    worker.postMessage({
+      doc,
+      find,
+      replace,
+      caseSensitive,
+      selectionIds: predicate ? [...editor.selectedIds] : null,
+    });
   };
 
   return (
@@ -406,9 +469,9 @@ function FindReplacePanel({ editor, predicate }: PanelProps) {
         variant="primary"
         className="w-full"
         onClick={run}
-        disabled={find === ""}
+        disabled={find === "" || busy}
       >
-        Replace all
+        {busy ? "Working…" : "Replace all"}
       </Button>
     </Panel>
   );
@@ -552,7 +615,13 @@ function MergePanel({ editor }: { editor: EditorApi }) {
   );
 }
 
-function LintPanel({ editor }: { editor: EditorApi }) {
+function LintPanel({
+  editor,
+  onJumpTo,
+}: {
+  editor: EditorApi;
+  onJumpTo: (index: number) => void;
+}) {
   const { notify } = useToast();
   const doc = editor.state.doc!;
   const findings = useMemo(() => lint(doc), [doc]);
@@ -637,7 +706,10 @@ function LintPanel({ editor }: { editor: EditorApi }) {
               <FindingRow
                 key={i}
                 finding={f}
-                onClick={() => jumpTo(editor, f)}
+                onClick={() => {
+                  editor.setSelection([f.cueId], f.cueIndex);
+                  onJumpTo(f.cueIndex);
+                }}
               />
             ))}
           </ul>
@@ -687,14 +759,6 @@ function scopeCount(editor: EditorApi, predicate?: CuePredicate): string {
     ? editor.selectedIds.size
     : (editor.state.doc?.cues.length ?? 0);
   return `${n} cue${n === 1 ? "" : "s"}`;
-}
-
-function jumpTo(editor: EditorApi, finding: LintFinding) {
-  editor.setSelection([finding.cueId], finding.cueIndex);
-  const el = document.querySelector(
-    `[aria-label="Select cue ${finding.cueIndex + 1}"]`,
-  );
-  el?.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
 function Checkbox({

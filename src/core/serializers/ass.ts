@@ -1,6 +1,33 @@
 import type { SerializeOptions, Subtitle } from "../types";
 import { formatAss } from "../time";
-import { DEFAULT_ASS_EVENT_FORMAT, synthHeader } from "../parsers/ass";
+import {
+  DEFAULT_ASS_EVENT_FORMAT,
+  formatTitleCase,
+  synthHeader,
+} from "../parsers/ass";
+
+/**
+ * ASS has no field escaping, so the `Text` column MUST be the final field or any comma in
+ * the dialogue corrupts the following fields. We canonicalize `text` to last on output and
+ * rewrite the `[Events]` `Format:` line to match, guaranteeing a faithful round-trip.
+ */
+function canonicalFormat(format: string[]): string[] {
+  if (format[format.length - 1] === "text") return format;
+  return [...format.filter((f) => f !== "text"), "text"];
+}
+
+/** Replace the `Format:` line in an ASS header so it matches the (canonical) event order. */
+function rewriteFormatLine(header: string, format: string[]): string {
+  const lines = header.split("\n");
+  const wanted = `Format: ${formatTitleCase(format).join(", ")}`;
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    if (/^\s*Format\s*:/i.test(lines[i])) {
+      lines[i] = wanted;
+      return lines.join("\n");
+    }
+  }
+  return header;
+}
 
 /** Serialize a subtitle document to Advanced SubStation Alpha (.ass). */
 export function serializeAss(
@@ -8,10 +35,11 @@ export function serializeAss(
   opts: SerializeOptions = {},
 ): string {
   const eol = opts.eol ?? "\n";
-  const format = sub.assEventFormat ?? DEFAULT_ASS_EVENT_FORMAT;
-  const header = (sub.assHeader ?? synthHeader(format))
+  const format = canonicalFormat(sub.assEventFormat ?? DEFAULT_ASS_EVENT_FORMAT);
+  const rawHeader = (sub.assHeader ?? synthHeader(format))
     .replace(/\r\n?/g, "\n")
     .replace(/\n+$/, "");
+  const header = rewriteFormatLine(rawHeader, format);
 
   const events = sub.cues.map((c) => {
     const a = c.ass;

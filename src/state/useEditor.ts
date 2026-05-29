@@ -5,6 +5,17 @@ import { detectAndDecode } from "../core/detect";
 
 const MAX_HISTORY = 100;
 
+/**
+ * Undo depth, scaled down for large documents. Timing transforms allocate a fresh object
+ * per cue, so retaining 100 snapshots of a multi-thousand-cue file would waste memory.
+ */
+function historyLimit(doc: Subtitle | null): number {
+  const n = doc?.cues.length ?? 0;
+  if (n > 5000) return 10;
+  if (n > 1500) return 30;
+  return MAX_HISTORY;
+}
+
 export interface EditorState {
   doc: Subtitle | null;
   past: Subtitle[];
@@ -71,7 +82,7 @@ function reducer(state: EditorState, action: Action): EditorState {
       };
     case "COMMIT": {
       if (!state.doc) return state;
-      const past = [...state.past, state.doc].slice(-MAX_HISTORY);
+      const past = [...state.past, state.doc].slice(-historyLimit(state.doc));
       return {
         ...state,
         doc: action.doc,
@@ -84,7 +95,7 @@ function reducer(state: EditorState, action: Action): EditorState {
       // Compute the transform against the live document inside the reducer — no refs needed.
       if (!state.doc) return state;
       const next = action.fn(state.doc);
-      const past = [...state.past, state.doc].slice(-MAX_HISTORY);
+      const past = [...state.past, state.doc].slice(-historyLimit(state.doc));
       return { ...state, doc: next, past, future: [], lastOp: action.label };
     }
     case "REDECODE": {
@@ -116,7 +127,7 @@ function reducer(state: EditorState, action: Action): EditorState {
         ...state,
         doc: prev,
         past: state.past.slice(0, -1),
-        future: [state.doc, ...state.future].slice(0, MAX_HISTORY),
+        future: [state.doc, ...state.future].slice(0, historyLimit(state.doc)),
         lastOp: "Undo",
       };
     }
@@ -126,7 +137,7 @@ function reducer(state: EditorState, action: Action): EditorState {
       return {
         ...state,
         doc: next,
-        past: [...state.past, state.doc].slice(-MAX_HISTORY),
+        past: [...state.past, state.doc].slice(-historyLimit(state.doc)),
         future: state.future.slice(1),
         lastOp: "Redo",
       };

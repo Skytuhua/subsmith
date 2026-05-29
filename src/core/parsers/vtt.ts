@@ -1,10 +1,7 @@
 import type { Cue, ParseResult, ParseWarning, Subtitle } from "../types";
 import { parseTimecode } from "../time";
 import { nextId } from "../id";
-import { normalize } from "./srt";
-
-const TIMING_RE =
-  /(-?\d{1,3}:\d{1,2}:\d{1,2}[.,]\d{1,3}|-?\d{1,2}:\d{1,2}[.,]\d{1,3})\s*-->\s*(-?\d{1,3}:\d{1,2}:\d{1,2}[.,]\d{1,3}|-?\d{1,2}:\d{1,2}[.,]\d{1,3})(.*)/;
+import { TIMING_RE, normalize, truncate } from "./shared";
 
 const isHeaderBlock = (block: string): boolean =>
   /^(WEBVTT|NOTE|STYLE|REGION)\b/.test(block.trimStart());
@@ -80,9 +77,4 @@ export function parseVtt(input: string): ParseResult {
     headerBlocks.length > 0 ? headerBlocks.join("\n\n") : "WEBVTT";
   const subtitle: Subtitle = { format: "vtt", cues, vttHeader };
   return { subtitle, warnings };
-}
-
-function truncate(s: string, n = 40): string {
-  const flat = s.replace(/\n/g, "⏎");
-  return flat.length > n ? flat.slice(0, n) + "…" : flat;
 }

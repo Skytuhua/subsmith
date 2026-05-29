@@ -242,6 +242,8 @@ function LoadVideoPrompt({ onPick }: { onPick: (file: File) => void }) {
         ref={ref}
         type="file"
         accept="video/*"
+        aria-label="Load a local video file"
+        tabIndex={-1}
         className="sr-only"
         onChange={(e) => {
           const f = e.target.files?.[0];

@@ -20,6 +20,10 @@ export function EditorView({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [activeCueId, setActiveCueId] = useState<string | null>(null);
   const [warningsDismissed, setWarningsDismissed] = useState(false);
+  const [jump, setJump] = useState<{ index: number; nonce: number }>({
+    index: -1,
+    nonce: 0,
+  });
   const doc = editor.state.doc!;
   const span = useMemo(() => docStats(doc).spanMs, [doc]);
 
@@ -72,7 +76,12 @@ export function EditorView({
                   "outline-2 -outline-offset-2 outline-dashed outline-accent",
               )}
             >
-              <CueTable editor={editor} activeCueId={activeCueId} />
+              <CueTable
+                editor={editor}
+                activeCueId={activeCueId}
+                jumpIndex={jump.index}
+                jumpNonce={jump.nonce}
+              />
               {dragging && (
                 <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-background/70 text-sm font-medium text-accent">
                   Drop to open this file
@@ -94,7 +103,10 @@ export function EditorView({
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
-            <OperationsPanel editor={editor} />
+            <OperationsPanel
+              editor={editor}
+              onJumpTo={(index) => setJump({ index, nonce: Date.now() })}
+            />
           </div>
         </aside>
       </div>

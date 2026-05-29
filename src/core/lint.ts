@@ -149,14 +149,19 @@ export function summarize(findings: LintFinding[]): LintSummary {
 
 // ---- Auto-fixers (each returns a new Subtitle) ----
 
-/** Trim each cue's end so it never overlaps the next cue (leaves a 1 ms gap). */
+/**
+ * Trim each cue's end so it never overlaps the next cue (leaves a 1 ms gap). Cues are
+ * sorted first so the fix is order-independent, and the end is clamped to the cue's own
+ * start — so even equal-start / fully-contained cues stop overlapping (a degenerate
+ * zero-length cue may result, which the negative-duration rule then surfaces for review).
+ */
 export function fixOverlaps(sub: Subtitle): Subtitle {
-  const cues = sub.cues.map((c) => ({ ...c }));
+  const cues = sortByTime(sub).cues.map((c) => ({ ...c }));
   for (let i = 0; i < cues.length - 1; i += 1) {
     const cur = cues[i];
     const next = cues[i + 1];
-    if (cur.end > next.start && next.start > cur.start) {
-      cur.end = Math.max(cur.start + 1, next.start - 1);
+    if (cur.end > next.start) {
+      cur.end = Math.max(cur.start, next.start - 1);
     }
   }
   return { ...sub, cues };

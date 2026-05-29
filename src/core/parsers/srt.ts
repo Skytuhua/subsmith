@@ -1,15 +1,9 @@
 import type { Cue, ParseResult, ParseWarning, Subtitle } from "../types";
 import { parseTimecode } from "../time";
 import { nextId } from "../id";
+import { TIMING_RE, normalize, truncate } from "./shared";
 
-/** Matches an SRT/VTT-ish timing line and captures the two timecodes + trailing text. */
-const TIMING_RE =
-  /(-?\d{1,3}:\d{1,2}:\d{1,2}[.,]\d{1,3}|-?\d{1,2}:\d{1,2}[.,]\d{1,3})\s*-->\s*(-?\d{1,3}:\d{1,2}:\d{1,2}[.,]\d{1,3}|-?\d{1,2}:\d{1,2}[.,]\d{1,3})(.*)/;
-
-/** Normalize line endings and strip a leading BOM. */
-export function normalize(text: string): string {
-  return text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
-}
+export { normalize };
 
 /**
  * Parse a SubRip (.srt) document. Lenient: blocks missing an index line are accepted,
@@ -57,9 +51,4 @@ export function parseSrt(input: string): ParseResult {
 
   const subtitle: Subtitle = { format: "srt", cues };
   return { subtitle, warnings };
-}
-
-function truncate(s: string, n = 40): string {
-  const flat = s.replace(/\n/g, "⏎");
-  return flat.length > n ? flat.slice(0, n) + "…" : flat;
 }

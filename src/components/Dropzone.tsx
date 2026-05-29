@@ -55,6 +55,8 @@ export function Dropzone({
         type="file"
         accept={SUBTITLE_ACCEPT}
         multiple={multiple}
+        aria-label="Choose a subtitle file"
+        tabIndex={-1}
         className="sr-only"
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);

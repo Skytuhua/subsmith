@@ -36,9 +36,13 @@ export function findReplace(
         count += 1;
         // Support $1.. backreferences for regex mode; literal otherwise.
         if (!opts.regex) return replace;
-        return replace.replace(/\$(\d+)/g, (_, n) => {
-          const idx = Number(n);
-          return (args[idx] as string) ?? "";
+        // args = [match, p1, …, pN, offset, whole(, groups?)]; capture-group count is N.
+        const lastIsGroups = typeof args[args.length - 1] === "object";
+        const groupCount = args.length - (lastIsGroups ? 4 : 3);
+        return replace.replace(/\$(\d+)/g, (whole, n) => {
+          const k = Number(n);
+          if (k >= 1 && k <= groupCount) return (args[k] as string) ?? "";
+          return whole; // leave out-of-range $n literal (no group to substitute)
         });
       });
       return next === c.text ? c : { ...c, text: next };

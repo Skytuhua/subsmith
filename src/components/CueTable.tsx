@@ -1,7 +1,9 @@
-import { memo, useCallback, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Scissors, Trash2, Copy, Plus } from "lucide-react";
 import type { Cue, Subtitle } from "../core/types";
 import { formatSrt, parseTimecode } from "../core/time";
+import { nextId } from "../core/id";
 import type { EditorApi } from "../state/useEditor";
 import { cn } from "../lib/cn";
 import { IconButton } from "./ui";
@@ -85,7 +87,7 @@ const CueRow = memo(function CueRow({
   return (
     <div
       className={cn(
-        "cv-row group grid grid-cols-[2.5rem_1fr] gap-x-3 border-b border-white/[0.04] px-2 py-2 sm:grid-cols-[2.5rem_auto_1fr_auto]",
+        "group grid grid-cols-[2.5rem_1fr] gap-x-3 border-b border-white/[0.04] px-2 py-2 sm:grid-cols-[2.5rem_auto_1fr_auto]",
         "transition-colors duration-100",
         selected ? "bg-accent/[0.07]" : "hover:bg-white/[0.02]",
         active && "ring-1 ring-inset ring-accent/50",
@@ -186,13 +188,36 @@ const CueRow = memo(function CueRow({
 export function CueTable({
   editor,
   activeCueId,
+  jumpIndex,
+  jumpNonce,
 }: {
   editor: EditorApi;
   activeCueId: string | null;
+  jumpIndex?: number | null;
+  jumpNonce?: number;
 }) {
   const doc = editor.state.doc!;
   const { selectedIds, setSelection } = editor;
   const lastClick = useRef<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Virtualize the cue list so files with thousands of cues stay smooth: only the rows
+  // near the viewport are mounted, and heights are measured dynamically (multi-line cues).
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual's stable API is used per its docs
+  const virtualizer = useVirtualizer({
+    count: doc.cues.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 64,
+    overscan: 12,
+    getItemKey: (i) => doc.cues[i].id,
+  });
+
+  // Scroll to a cue when a lint finding is clicked.
+  useEffect(() => {
+    if (jumpIndex == null) return;
+    virtualizer.scrollToIndex(jumpIndex, { align: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpNonce]);
 
   const patch = useCallback(
     (id: string, p: Partial<Cue>, label: string) => {
@@ -231,9 +256,14 @@ export function CueTable({
     [editor, selectedIds, setSelection],
   );
 
+  // Operations that mint new cue ids are computed in the handler (not inside the reducer)
+  // so the reducer stays pure — ids are generated exactly once, never during a StrictMode
+  // double-invoke.
   const splitCue = useCallback(
     (index: number) => {
-      editor.apply((d) => splitCueAt(d, index), "Split cue");
+      const d = editor.state.doc;
+      if (!d) return;
+      editor.setDoc(splitCueAt(d, index), "Split cue");
     },
     [editor],
   );
@@ -250,31 +280,22 @@ export function CueTable({
 
   const duplicateCue = useCallback(
     (index: number) => {
-      editor.apply((d) => {
-        const cues = [...d.cues];
-        const src = cues[index];
-        cues.splice(index + 1, 0, {
-          ...src,
-          id: `dup-${src.id}-${Date.now().toString(36)}`,
-        });
-        return { ...d, cues };
-      }, "Duplicate cue");
+      const d = editor.state.doc;
+      if (!d) return;
+      const cues = [...d.cues];
+      cues.splice(index + 1, 0, { ...cues[index], id: nextId() });
+      editor.setDoc({ ...d, cues }, "Duplicate cue");
     },
     [editor],
   );
 
   const addCue = useCallback(() => {
-    editor.apply((d) => {
-      const last = d.cues[d.cues.length - 1];
-      const start = last ? last.end + 100 : 0;
-      const newCue: Cue = {
-        id: `new-${Date.now().toString(36)}`,
-        start,
-        end: start + 2000,
-        text: "",
-      };
-      return { ...d, cues: [...d.cues, newCue] };
-    }, "Add cue");
+    const d = editor.state.doc;
+    if (!d) return;
+    const last = d.cues[d.cues.length - 1];
+    const start = last ? last.end + 100 : 0;
+    const newCue: Cue = { id: nextId(), start, end: start + 2000, text: "" };
+    editor.setDoc({ ...d, cues: [...d.cues, newCue] }, "Add cue");
   }, [editor]);
 
   return (
@@ -295,24 +316,43 @@ export function CueTable({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         {doc.cues.length === 0 ? (
           <EmptyDoc onAdd={addCue} />
         ) : (
-          doc.cues.map((cue, i) => (
-            <CueRow
-              key={cue.id}
-              cue={cue}
-              index={i}
-              selected={selectedIds.has(cue.id)}
-              active={activeCueId === cue.id}
-              onSelect={handleSelect}
-              onPatch={patch}
-              onSplit={splitCue}
-              onDelete={deleteCue}
-              onDuplicate={duplicateCue}
-            />
-          ))
+          <div
+            style={{ height: virtualizer.getTotalSize(), position: "relative", width: "100%" }}
+          >
+            {virtualizer.getVirtualItems().map((vi) => {
+              const cue = doc.cues[vi.index];
+              return (
+                <div
+                  key={cue.id}
+                  data-index={vi.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${vi.start}px)`,
+                  }}
+                >
+                  <CueRow
+                    cue={cue}
+                    index={vi.index}
+                    selected={selectedIds.has(cue.id)}
+                    active={activeCueId === cue.id}
+                    onSelect={handleSelect}
+                    onPatch={patch}
+                    onSplit={splitCue}
+                    onDelete={deleteCue}
+                    onDuplicate={duplicateCue}
+                  />
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
@@ -354,12 +394,7 @@ function splitCueAt(doc: Subtitle, index: number): Subtitle {
     textB = words.slice(half).join(" ");
   }
   const a: Cue = { ...src, end: mid, text: textA };
-  const b: Cue = {
-    ...src,
-    id: `split-${src.id}-${Date.now().toString(36)}`,
-    start: mid,
-    text: textB,
-  };
+  const b: Cue = { ...src, id: nextId(), start: mid, text: textB };
   cues.splice(index, 1, a, b);
   return { ...doc, cues };
 }
