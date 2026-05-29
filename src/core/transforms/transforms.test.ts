@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { Cue, Subtitle } from "../types";
 import { shift } from "./shift";
 import { computeLinear, twoPointSync } from "./linear";
-import { applyFramerate, fpsFactor } from "./framerate";
+import { applyFramerate, fpsFactor, matchFpsRatio } from "./framerate";
 import { applyScale } from "./scale";
 import {
   findReplace,
@@ -13,6 +13,7 @@ import {
   fixMojibakeAll,
 } from "./text";
 import { merge } from "./merge";
+import { setMinGap } from "./gap";
 
 function sub(cues: Array<[number, number, string]>): Subtitle {
   return {
@@ -90,6 +91,14 @@ describe("framerate conversion", () => {
     const input = sub([[1000, 2000, "a"]]);
     expect(applyFramerate(input, 25, 25)).toBe(input);
   });
+  it("matchFpsRatio recognizes a standard sync factor", () => {
+    const m = matchFpsRatio(25 / 23.976); // the factor a two-point 25->23.976 sync yields
+    expect(m?.from).toBe(25);
+    expect(m?.to).toBe(23.976);
+  });
+  it("matchFpsRatio returns null for a pure offset (factor ~1)", () => {
+    expect(matchFpsRatio(1)).toBeNull();
+  });
 });
 
 describe("scale", () => {
@@ -133,6 +142,22 @@ describe("text operations", () => {
     const s = stripTags(sub([[0, 1, "<i>hi</i> {\\an8}there"]]));
     expect(s.cues[0].text).toBe("hi there");
   });
+  it("converts ASS hard-space and line-break escapes", () => {
+    const s = stripTags(sub([[0, 1, "word1\\hword2\\Nword3"]]));
+    expect(s.cues[0].text).toBe("word1 word2\nword3");
+  });
+  it("honors the caseSensitive option", () => {
+    const cs = findReplace(sub([[0, 1, "Hello hello"]]), "Hello", "X", {
+      caseSensitive: true,
+    });
+    expect(cs.count).toBe(1);
+    expect(cs.subtitle.cues[0].text).toBe("X hello");
+    const ci = findReplace(sub([[0, 1, "Hello hello"]]), "Hello", "X", {
+      caseSensitive: false,
+    });
+    expect(ci.count).toBe(2);
+    expect(ci.subtitle.cues[0].text).toBe("X X");
+  });
   it("trims and collapses whitespace", () => {
     const s = trimWhitespace(sub([[0, 1, "  hello   world  \n  next "]]));
     expect(s.cues[0].text).toBe("hello world\nnext");
@@ -161,6 +186,52 @@ describe("text operations", () => {
     // "Ã©" is the UTF-8 bytes of "é" misread as Latin-1.
     const s = fixMojibakeAll(sub([[0, 1, "cafÃ©"]]));
     expect(s.cues[0].text).toBe("café");
+  });
+});
+
+describe("minimum gap", () => {
+  it("trims an earlier cue's end so the gap to the next is at least gapMs", () => {
+    const s = setMinGap(
+      sub([
+        [0, 1000, "a"],
+        [1100, 2000, "b"],
+      ]),
+      200,
+    );
+    expect(s.cues[0].end).toBe(900); // 1100 - 200
+    expect(s.cues[1].start).toBe(1100);
+  });
+  it("is order-independent (sorts first)", () => {
+    const s = setMinGap(
+      sub([
+        [2000, 3000, "b"],
+        [0, 1900, "a"],
+      ]),
+      100,
+    );
+    expect(s.cues.map((c) => c.text)).toEqual(["a", "b"]);
+    expect(s.cues[0].end).toBe(1900); // already exactly 100 ms before b.start
+  });
+  it("clamps a trimmed end so it never precedes the cue's own start", () => {
+    const s = setMinGap(
+      sub([
+        [500, 5000, "a"],
+        [600, 2000, "b"],
+      ]),
+      200,
+    );
+    expect(s.cues[0].end).toBe(500); // limit 400 < start 500 → clamp to start
+    expect(s.cues[0].end).toBeGreaterThanOrEqual(s.cues[0].start);
+  });
+  it("leaves an already-spaced document untouched in timings", () => {
+    const s = setMinGap(
+      sub([
+        [0, 1000, "a"],
+        [3000, 4000, "b"],
+      ]),
+      100,
+    );
+    expect(s.cues[0].end).toBe(1000);
   });
 });
 

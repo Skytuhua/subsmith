@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import type { EditorApi } from "../state/useEditor";
+import type { ParseWarning } from "../core/types";
 import { docStats } from "../lib/stats";
 import { Header } from "./Header";
 import { CueTable } from "./CueTable";
@@ -19,7 +20,11 @@ export function EditorView({
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [activeCueId, setActiveCueId] = useState<string | null>(null);
-  const [warningsDismissed, setWarningsDismissed] = useState(false);
+  // Track which warnings array was dismissed (rather than a bare boolean), so the banner
+  // auto-reappears on the next parse: each load/re-decode produces a fresh warnings array,
+  // making `dismissed !== warnings` true again — no effect or reset needed.
+  const [dismissedWarnings, setDismissedWarnings] =
+    useState<ParseWarning[] | null>(null);
   const [jump, setJump] = useState<{ index: number; nonce: number }>({
     index: -1,
     nonce: 0,
@@ -35,6 +40,7 @@ export function EditorView({
   };
 
   const warnings = editor.state.warnings;
+  const showWarnings = warnings.length > 0 && dismissedWarnings !== warnings;
 
   return (
     <div className="flex h-screen flex-col">
@@ -45,7 +51,7 @@ export function EditorView({
         previewOpen={previewOpen}
       />
 
-      {warnings.length > 0 && !warningsDismissed && (
+      {showWarnings && (
         <div className="flex items-start gap-2 border-b border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <div className="flex-1">
@@ -58,7 +64,7 @@ export function EditorView({
           <button
             type="button"
             aria-label="Dismiss warnings"
-            onClick={() => setWarningsDismissed(true)}
+            onClick={() => setDismissedWarnings(warnings)}
             className="cursor-pointer rounded-sm p-0.5 hover:text-foreground"
           >
             <X className="h-4 w-4" aria-hidden />

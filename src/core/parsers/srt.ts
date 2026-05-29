@@ -40,13 +40,22 @@ export function parseSrt(input: string): ParseResult {
       continue;
     }
 
+    // Lines before the timing line are normally just the numeric index. Any *non-index*
+    // line there is unexpected text — recover it rather than dropping it silently, so a
+    // hand-edited or tool-mangled file never loses a caption without warning.
+    const stray = lines
+      .slice(0, timingIdx)
+      .filter((l) => l.trim() !== "" && !/^\d+$/.test(l.trim()));
     const textLines = lines.slice(timingIdx + 1);
-    cues.push({
-      id: nextId(),
-      start,
-      end,
-      text: textLines.join("\n").replace(/\s+$/, ""),
-    });
+    let text = textLines.join("\n").replace(/\s+$/, "");
+    if (stray.length > 0) {
+      text = text ? stray.join("\n") + "\n" + text : stray.join("\n");
+      warnings.push({
+        message: `Recovered text before the timing line: "${truncate(stray.join(" "))}"`,
+      });
+    }
+
+    cues.push({ id: nextId(), start, end, text });
   }
 
   const subtitle: Subtitle = { format: "srt", cues };

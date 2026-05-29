@@ -22,12 +22,6 @@ export function serialize(
 
 export { serializeSrt, serializeVtt, serializeAss };
 
-export const FORMAT_EXTENSION: Record<SubtitleFormat, string> = {
-  srt: "srt",
-  vtt: "vtt",
-  ass: "ass",
-};
-
 export const FORMAT_LABEL: Record<SubtitleFormat, string> = {
   srt: "SubRip (SRT)",
   vtt: "WebVTT",

@@ -88,6 +88,20 @@ describe("SRT parsing", () => {
     const { subtitle } = parseSrt(SRT);
     expect(serializeSrt(subtitle)).toBe(SRT);
   });
+
+  it("recovers text that appears before the timing line instead of dropping it", () => {
+    const { subtitle, warnings } = parseSrt(
+      "Some caption\n00:00:01,000 --> 00:00:02,000",
+    );
+    expect(subtitle.cues).toHaveLength(1);
+    expect(subtitle.cues[0].text).toBe("Some caption");
+    expect(warnings.length).toBeGreaterThan(0);
+  });
+
+  it("does not warn on a normal index-then-timing block", () => {
+    const { warnings } = parseSrt("7\n00:00:01,000 --> 00:00:02,000\nHi");
+    expect(warnings).toHaveLength(0);
+  });
 });
 
 describe("VTT parsing", () => {
@@ -105,6 +119,11 @@ describe("VTT parsing", () => {
     const reparsed = parseVtt(out);
     expect(reparsed.subtitle.cues).toHaveLength(2);
     expect(reparsed.subtitle.cues[0].vtt?.settings).toBe("line:0 position:50%");
+    // Verify timing and text survive serialization, not just the cue count/settings.
+    expect(reparsed.subtitle.cues[0].start).toBe(1000);
+    expect(reparsed.subtitle.cues[0].end).toBe(4000);
+    expect(reparsed.subtitle.cues[0].text).toBe("Hello world");
+    expect(reparsed.subtitle.cues[1].vtt?.id).toBe("cue-2");
   });
 });
 
@@ -128,6 +147,28 @@ describe("ASS parsing", () => {
     expect(out).toContain(
       "Comment: 0,0:00:05.00,0:00:06.50,Default,,0,0,0,,Next cue, with comma",
     );
+  });
+});
+
+describe("serializer options", () => {
+  it("prepends a UTF-8 BOM when requested, across formats", () => {
+    const { subtitle } = parseSrt(SRT);
+    expect(serializeSrt(subtitle, { bom: true }).startsWith("﻿")).toBe(true);
+    expect(serializeSrt(subtitle, { bom: false }).startsWith("﻿")).toBe(
+      false,
+    );
+    expect(serializeVtt(subtitle, { bom: true }).startsWith("﻿")).toBe(
+      true,
+    );
+    expect(serializeAss(subtitle, { bom: true }).startsWith("﻿")).toBe(
+      true,
+    );
+  });
+  it("emits CRLF line endings when requested and no lone LF remains", () => {
+    const { subtitle } = parseSrt(SRT);
+    const out = serializeSrt(subtitle, { eol: "\r\n" });
+    expect(out).toContain("\r\n");
+    expect(out.replace(/\r\n/g, "").includes("\n")).toBe(false);
   });
 });
 

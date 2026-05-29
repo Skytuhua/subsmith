@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useReducer } from "react";
 import type { ParseWarning, Subtitle, SubtitleFormat } from "../core/types";
 import { parse } from "../core/parsers";
-import { detectAndDecode } from "../core/detect";
+import { detectAndDecode, decodeText } from "../core/detect";
 
 const MAX_HISTORY = 100;
 
@@ -9,7 +9,7 @@ const MAX_HISTORY = 100;
  * Undo depth, scaled down for large documents. Timing transforms allocate a fresh object
  * per cue, so retaining 100 snapshots of a multi-thousand-cue file would waste memory.
  */
-function historyLimit(doc: Subtitle | null): number {
+export function historyLimit(doc: Subtitle | null): number {
   const n = doc?.cues.length ?? 0;
   if (n > 5000) return 10;
   if (n > 1500) return 30;
@@ -32,7 +32,7 @@ export interface EditorState {
   lastOp: string | null;
 }
 
-const initialState: EditorState = {
+export const initialState: EditorState = {
   doc: null,
   past: [],
   future: [],
@@ -66,7 +66,8 @@ type Action =
   | { type: "SET_EXPORT_FORMAT"; format: SubtitleFormat }
   | { type: "CLEAR" };
 
-function reducer(state: EditorState, action: Action): EditorState {
+/** Exported for unit testing — a pure (state, action) => state function. */
+export function reducer(state: EditorState, action: Action): EditorState {
   switch (action.type) {
     case "LOAD":
       return {
@@ -99,11 +100,13 @@ function reducer(state: EditorState, action: Action): EditorState {
       return { ...state, doc: next, past, future: [], lastOp: action.label };
     }
     case "REDECODE": {
-      // Re-decoding the original bytes replaces the document and resets history.
+      // Re-decoding the original bytes replaces the document and resets history. The
+      // encoding is always an explicit override here, so decode synchronously — jschardet
+      // is never needed and the reducer stays pure (no async).
       if (!state.rawBytes) return state;
-      const decoded = detectAndDecode(state.rawBytes, action.encoding);
+      const text = decodeText(state.rawBytes, action.encoding);
       const { subtitle, warnings } = parse(
-        decoded.text,
+        text,
         undefined,
         state.fileName ?? undefined,
       );
@@ -167,7 +170,7 @@ export interface EditorApi {
     bytes: Uint8Array,
     fileName: string,
     encodingOverride?: string,
-  ) => void;
+  ) => Promise<void>;
   /** Load plain text (e.g. the built-in demo) directly. */
   loadText: (text: string, fileName: string, format?: SubtitleFormat) => void;
   /** Apply a pure transform to the current document, recording one undo step. */
@@ -187,8 +190,8 @@ export function useEditor(): EditorApi {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   const loadBytes = useCallback(
-    (bytes: Uint8Array, fileName: string, encodingOverride?: string) => {
-      const decoded = detectAndDecode(bytes, encodingOverride);
+    async (bytes: Uint8Array, fileName: string, encodingOverride?: string) => {
+      const decoded = await detectAndDecode(bytes, encodingOverride);
       const { subtitle, warnings } = parse(decoded.text, undefined, fileName);
       dispatch({
         type: "LOAD",
@@ -254,20 +257,40 @@ export function useEditor(): EditorApi {
     [state.selection],
   );
 
-  return {
-    state,
-    canUndo: state.past.length > 0,
-    canRedo: state.future.length > 0,
-    selectedIds,
-    loadBytes,
-    loadText,
-    apply,
-    setDoc,
-    redecode,
-    setExportFormat,
-    setSelection,
-    undo,
-    redo,
-    clear,
-  };
+  // Memoize the API object so its identity is stable whenever neither `state` nor the
+  // selection changed (e.g. a no-op dispatch that returns the same state reference). All
+  // the members are already stable useCallbacks; this lets consumers bail out of re-renders
+  // and avoids re-subscribing effects that depend on the editor object.
+  return useMemo(
+    () => ({
+      state,
+      canUndo: state.past.length > 0,
+      canRedo: state.future.length > 0,
+      selectedIds,
+      loadBytes,
+      loadText,
+      apply,
+      setDoc,
+      redecode,
+      setExportFormat,
+      setSelection,
+      undo,
+      redo,
+      clear,
+    }),
+    [
+      state,
+      selectedIds,
+      loadBytes,
+      loadText,
+      apply,
+      setDoc,
+      redecode,
+      setExportFormat,
+      setSelection,
+      undo,
+      redo,
+      clear,
+    ],
+  );
 }

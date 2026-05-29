@@ -31,9 +31,12 @@ export function StatusBar({ editor }: { editor: EditorApi }) {
         <FileCode2 className="h-3.5 w-3.5" aria-hidden />
         <span className="font-mono">{encLabel}</span>
       </span>
-      {state.lastOp && (
-        <span className="text-muted-fg/60">· {state.lastOp}</span>
-      )}
+      {/* Always-rendered polite live region: announces the last operation (undo/redo,
+          inline edits, re-decode) to screen readers without being chatty — lastOp only
+          changes on a committed operation, not per keystroke. */}
+      <span className="text-muted-fg/60" aria-live="polite" aria-atomic="true">
+        {state.lastOp ? `· ${state.lastOp}` : ""}
+      </span>
     </footer>
   );
 }

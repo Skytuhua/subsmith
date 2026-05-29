@@ -9,11 +9,16 @@ import {
   Combine,
   ListChecks,
   ArrowRight,
+  SeparatorHorizontal,
 } from "lucide-react";
 import type { CuePredicate } from "../core/transforms/common";
 import { shift } from "../core/transforms/shift";
 import { computeLinear, applyLinear } from "../core/transforms/linear";
-import { FPS_PRESETS, applyFramerate } from "../core/transforms/framerate";
+import {
+  FPS_PRESETS,
+  applyFramerate,
+  matchFpsRatio,
+} from "../core/transforms/framerate";
 import { applyScale } from "../core/transforms/scale";
 import {
   findReplace,
@@ -24,6 +29,7 @@ import {
   fixMojibakeAll,
 } from "../core/transforms/text";
 import { merge } from "../core/transforms/merge";
+import { setMinGap } from "../core/transforms/gap";
 import { parse } from "../core/parsers";
 import { detectAndDecode } from "../core/detect";
 import {
@@ -93,6 +99,7 @@ export function OperationsPanel({
       <ScalePanel editor={editor} predicate={predicate} />
       <FindReplacePanel editor={editor} predicate={predicate} />
       <CleanupPanel editor={editor} predicate={predicate} />
+      <GapPanel editor={editor} />
       <MergePanel editor={editor} />
       <LintPanel editor={editor} onJumpTo={onJumpTo} />
     </div>
@@ -200,8 +207,12 @@ function SyncPanel({ editor, predicate }: PanelProps) {
       return;
     }
     editor.apply((d) => applyLinear(d, t, predicate), "Two-point sync");
+    // If the solved speed factor matches a standard frame-rate ratio, say so — it turns an
+    // opaque number into an explainable, reusable conversion.
+    const fps = matchFpsRatio(t.a);
     notify(
-      `Synced ${scopeCount(editor, predicate)} (speed ×${t.a.toFixed(4)})`,
+      `Synced ${scopeCount(editor, predicate)} (speed ×${t.a.toFixed(4)})` +
+        (fps ? ` — matches a ${fps.label} conversion` : ""),
     );
     setNew1("");
     setNew2("");
@@ -423,7 +434,26 @@ function FindReplacePanel({ editor, predicate }: PanelProps) {
       worker.terminate();
       workerRef.current = null;
       setBusy(false);
-      commit(ev.data);
+      const res = ev.data as { subtitle: Subtitle; count: number; error?: string };
+      if (res.error) {
+        notify(`Invalid regular expression: ${res.error}`, "error");
+        return;
+      }
+      if (res.count === 0) {
+        notify("No matches found.", "info");
+        return;
+      }
+      // The pattern is now proven non-catastrophic, so re-run it synchronously against the
+      // LIVE document via editor.apply. This preserves any edits the user made while the
+      // worker was running, instead of overwriting them with the stale snapshot the worker
+      // computed from.
+      editor.apply(
+        (d) =>
+          findReplace(d, find, replace, { regex: true, caseSensitive, predicate })
+            .subtitle,
+        `Replace "${find}"`,
+      );
+      notify(`Replaced ${res.count} occurrence${res.count === 1 ? "" : "s"}.`);
     };
     worker.onerror = () => {
       window.clearTimeout(timer);
@@ -549,6 +579,45 @@ function CleanupPanel({ editor, predicate }: PanelProps) {
   );
 }
 
+function GapPanel({ editor }: { editor: EditorApi }) {
+  const { notify } = useToast();
+  const [gap, setGap] = useState("80");
+  const apply = () => {
+    const ms = Math.round(parseFloat(gap));
+    if (!(ms >= 0)) {
+      notify("Enter a non-negative gap in milliseconds.", "error");
+      return;
+    }
+    editor.apply((d) => setMinGap(d, ms), `Min gap ${ms}ms`);
+    notify(`Enforced a ${ms} ms minimum gap between cues.`);
+  };
+  return (
+    <Panel
+      title="Minimum gap"
+      icon={<SeparatorHorizontal className="h-4 w-4" />}
+    >
+      <p className="text-xs text-muted-fg/80">
+        Trim cue ends so consecutive subtitles never touch — a clean, readable gap (handy
+        after a sync or frame-rate pass leaves cues butting together).
+      </p>
+      <div className="flex items-end gap-2">
+        <Field label="Gap (ms)">
+          <TextInput
+            type="number"
+            step="10"
+            min="0"
+            value={gap}
+            onChange={(e) => setGap(e.target.value)}
+          />
+        </Field>
+        <Button variant="primary" onClick={apply}>
+          Apply
+        </Button>
+      </div>
+    </Panel>
+  );
+}
+
 function MergePanel({ editor }: { editor: EditorApi }) {
   const { notify } = useToast();
   const [addition, setAddition] = useState<{
@@ -561,7 +630,7 @@ function MergePanel({ editor }: { editor: EditorApi }) {
     const file = files[0];
     try {
       const bytes = await readFileBytes(file);
-      const decoded = detectAndDecode(bytes);
+      const decoded = await detectAndDecode(bytes);
       const { subtitle } = parse(decoded.text, undefined, file.name);
       setAddition({ name: file.name, sub: subtitle });
     } catch {
@@ -646,6 +715,7 @@ function LintPanel({
       title="Validate"
       icon={<ListChecks className="h-4 w-4" />}
       badge={badge}
+      defaultOpen
     >
       {summary.total === 0 ? (
         <p className="text-sm text-accent">No timing or text issues found.</p>
@@ -702,9 +772,9 @@ function LintPanel({
             </Button>
           </div>
           <ul className="max-h-56 space-y-1 overflow-y-auto pr-1">
-            {findings.slice(0, 200).map((f, i) => (
+            {findings.slice(0, 200).map((f) => (
               <FindingRow
-                key={i}
+                key={`${f.cueId}-${f.rule}`}
                 finding={f}
                 onClick={() => {
                   editor.setSelection([f.cueId], f.cueIndex);

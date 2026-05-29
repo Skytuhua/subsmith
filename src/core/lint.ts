@@ -1,5 +1,6 @@
 import type { Subtitle } from "./types";
 import { sortByTime, removeEmpty } from "./transforms/text";
+import { visibleLength, readingSpeedCps } from "./reading";
 
 export type LintSeverity = "error" | "warning" | "info";
 export type LintRule =
@@ -31,15 +32,6 @@ export const DEFAULT_THRESHOLDS: LintThresholds = {
   maxCps: 25,
 };
 
-/** Visible-character count (tags/whitespace excluded) for reading-speed estimates. */
-function visibleLength(text: string): number {
-  return text
-    .replace(/\{[^}]*\}/g, "")
-    .replace(/<[^>]*>/g, "")
-    .replace(/\s+/g, " ")
-    .trim().length;
-}
-
 /** Run all validation rules over a subtitle, returning ordered findings. */
 export function lint(
   sub: Subtitle,
@@ -47,6 +39,24 @@ export function lint(
 ): LintFinding[] {
   const findings: LintFinding[] = [];
   const cues = sub.cues;
+
+  // Order-independent overlap detection. Sort a view by start time and sweep, tracking the
+  // furthest end seen so far: any cue whose start falls before that maximum overlaps some
+  // earlier cue. This catches overlaps the naive "compare to the array-previous cue" check
+  // misses on unsorted files, and aligns lint() with the already-order-independent
+  // fixOverlaps. Findings map back to the original index so the Validate panel still jumps
+  // to the right row. (out-of-order, below, intentionally stays based on array order.)
+  const overlapMsByIndex = new Map<number, number>();
+  const sorted = cues
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => a.c.start - b.c.start || a.c.end - b.c.end || a.i - b.i);
+  let maxEnd = -Infinity;
+  for (const { c, i } of sorted) {
+    if (c.end > c.start && c.start < maxEnd) {
+      overlapMsByIndex.set(i, maxEnd - c.start);
+    }
+    if (c.end > maxEnd) maxEnd = c.end;
+  }
 
   cues.forEach((c, i) => {
     const dur = c.end - c.start;
@@ -77,7 +87,7 @@ export function lint(
           message: `Cue ${i + 1} stays up ${(dur / 1000).toFixed(1)} s (over ${(thresholds.maxDurationMs / 1000).toFixed(0)} s).`,
         });
       }
-      const cps = visibleLength(c.text) / (dur / 1000);
+      const cps = readingSpeedCps(c.text, dur);
       if (cps > thresholds.maxCps && visibleLength(c.text) > 10) {
         findings.push({
           rule: "fast-reading",
@@ -99,26 +109,25 @@ export function lint(
       });
     }
 
-    if (i > 0) {
-      const prev = cues[i - 1];
-      if (c.start < prev.start) {
-        findings.push({
-          rule: "out-of-order",
-          severity: "warning",
-          cueIndex: i,
-          cueId: c.id,
-          message: `Cue ${i + 1} starts before the previous cue.`,
-        });
-      }
-      if (c.start < prev.end && c.start >= prev.start) {
-        findings.push({
-          rule: "overlap",
-          severity: "warning",
-          cueIndex: i,
-          cueId: c.id,
-          message: `Cue ${i + 1} overlaps the previous cue by ${prev.end - c.start} ms.`,
-        });
-      }
+    if (i > 0 && c.start < cues[i - 1].start) {
+      findings.push({
+        rule: "out-of-order",
+        severity: "warning",
+        cueIndex: i,
+        cueId: c.id,
+        message: `Cue ${i + 1} starts before the previous cue.`,
+      });
+    }
+
+    const overlapMs = overlapMsByIndex.get(i);
+    if (overlapMs !== undefined) {
+      findings.push({
+        rule: "overlap",
+        severity: "warning",
+        cueIndex: i,
+        cueId: c.id,
+        message: `Cue ${i + 1} overlaps another cue by ${overlapMs} ms.`,
+      });
     }
   });
 

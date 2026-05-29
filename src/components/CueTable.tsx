@@ -4,6 +4,8 @@ import { Scissors, Trash2, Copy, Plus } from "lucide-react";
 import type { Cue, Subtitle } from "../core/types";
 import { formatSrt, parseTimecode } from "../core/time";
 import { nextId } from "../core/id";
+import { readingSpeedCps } from "../core/reading";
+import { DEFAULT_THRESHOLDS } from "../core/lint";
 import type { EditorApi } from "../state/useEditor";
 import { cn } from "../lib/cn";
 import { IconButton } from "./ui";
@@ -21,21 +23,41 @@ function TimeInput({
   ariaLabel: string;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const [parseError, setParseError] = useState(false);
   const display = draft ?? formatSrt(valueMs);
+  // `invalid` flags a negative duration (cross-field); `parseError` flags an unparseable
+  // value just typed into THIS field. Either should read as invalid to AT and the eye.
+  const showInvalid = invalid || parseError;
 
   const commit = () => {
     if (draft === null) return;
     const ms = parseTimecode(draft);
-    if (ms !== null) onCommit(ms);
+    if (ms === null) {
+      // Keep an unparseable draft visible (flagged) instead of silently reverting it, so
+      // the user can see and correct their typo. An empty field just reverts.
+      if (draft.trim() !== "") {
+        setParseError(true);
+        return;
+      }
+      setDraft(null);
+      return;
+    }
+    onCommit(ms);
     setDraft(null);
+    setParseError(false);
   };
 
   return (
     <input
       aria-label={ariaLabel}
+      aria-invalid={showInvalid || undefined}
+      title={parseError ? "Use hh:mm:ss,mmm (or .mmm) format" : undefined}
       inputMode="numeric"
       value={display}
-      onChange={(e) => setDraft(e.target.value)}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        setParseError(false);
+      }}
       onFocus={(e) => e.currentTarget.select()}
       onBlur={commit}
       onKeyDown={(e) => {
@@ -43,13 +65,14 @@ function TimeInput({
           e.currentTarget.blur();
         } else if (e.key === "Escape") {
           setDraft(null);
+          setParseError(false);
           e.currentTarget.blur();
         }
       }}
       className={cn(
         "w-[7.5rem] rounded-sm border bg-background/40 px-1.5 py-1 text-center font-mono text-xs tabular-nums text-foreground",
         "transition-colors duration-150 focus:border-accent",
-        invalid
+        showInvalid
           ? "border-destructive text-destructive"
           : "border-transparent hover:border-border",
       )}
@@ -83,6 +106,10 @@ const CueRow = memo(function CueRow({
   const [text, setText] = useState<string | null>(null);
   const duration = cue.end - cue.start;
   const negative = duration <= 0;
+  // Reading speed (chars/sec) — surfaces the same metric the lint "fast-reading" rule uses,
+  // inline per cue, for the readability-conscious (fansubbers, translators, learners).
+  const cps = negative ? 0 : readingSpeedCps(cue.text, duration);
+  const fast = cps > DEFAULT_THRESHOLDS.maxCps;
 
   return (
     <div
@@ -134,6 +161,17 @@ const CueRow = memo(function CueRow({
         >
           {negative ? "invalid" : `${(duration / 1000).toFixed(2)}s`}
         </span>
+        {cps > 0 && (
+          <span
+            className={cn(
+              "px-1 font-mono text-[11px] tabular-nums",
+              fast ? "text-warning" : "text-muted-fg/40",
+            )}
+            title={`${Math.round(cps)} characters/second${fast ? " — reads fast" : ""}`}
+          >
+            {Math.round(cps)} cps
+          </span>
+        )}
       </div>
 
       {/* Text. */}
@@ -156,27 +194,19 @@ const CueRow = memo(function CueRow({
         )}
       />
 
-      {/* Row actions. */}
-      <div className="col-start-2 flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 sm:col-start-4">
-        <IconButton
-          label="Duplicate cue"
-          onClick={() => onDuplicate(index)}
-          className="h-7 w-7"
-        >
+      {/* Row actions. Always visible on touch (mobile), hover/focus-reveal on sm+ pointers —
+          otherwise touch users had no way to duplicate/split/delete a single cue. */}
+      <div className="col-start-2 flex items-center gap-0.5 opacity-100 sm:col-start-4 sm:opacity-0 sm:transition-opacity sm:focus-within:opacity-100 sm:group-hover:opacity-100">
+        <IconButton label="Duplicate cue" onClick={() => onDuplicate(index)}>
           <Copy className="h-3.5 w-3.5" aria-hidden />
         </IconButton>
-        <IconButton
-          label="Split cue"
-          onClick={() => onSplit(index)}
-          className="h-7 w-7"
-        >
+        <IconButton label="Split cue" onClick={() => onSplit(index)}>
           <Scissors className="h-3.5 w-3.5" aria-hidden />
         </IconButton>
         <IconButton
           label="Delete cue"
           onClick={() => onDelete(cue.id)}
           variant="destructive"
-          className="h-7 w-7"
         >
           <Trash2 className="h-3.5 w-3.5" aria-hidden />
         </IconButton>
@@ -198,7 +228,9 @@ export function CueTable({
 }) {
   const doc = editor.state.doc!;
   const { selectedIds, setSelection } = editor;
-  const lastClick = useRef<number | null>(null);
+  // Anchor the shift-click range on a cue *id*, not an array index, so it stays correct
+  // after cues are reordered, deleted, merged, or undone.
+  const lastClick = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Virtualize the cue list so files with thousands of cues stay smooth: only the rows
@@ -212,11 +244,14 @@ export function CueTable({
     getItemKey: (i) => doc.cues[i].id,
   });
 
-  // Scroll to a cue when a lint finding is clicked.
+  // Scroll to a cue when a lint finding is clicked. Intentionally fires only when jumpNonce
+  // changes (each click is a fresh jump request, even to the same index): jumpIndex is a
+  // prop so the closure always reads its current value, EditorView sets index+nonce together
+  // (EditorView.tsx), and virtualizer is a stable ref — so omitting them is safe, not stale.
   useEffect(() => {
     if (jumpIndex == null) return;
     virtualizer.scrollToIndex(jumpIndex, { align: "center" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce is the deliberate trigger (see above)
   }, [jumpNonce]);
 
   const patch = useCallback(
@@ -237,7 +272,11 @@ export function CueTable({
       const cues = editor.state.doc!.cues;
       const id = cues[index].id;
       if (e.shiftKey && lastClick.current !== null) {
-        const [a, b] = [lastClick.current, index].sort((x, y) => x - y);
+        // Resolve the anchor id to its *current* index; fall back to this click if the
+        // anchored cue has since been removed.
+        const anchor = cues.findIndex((c) => c.id === lastClick.current);
+        const from = anchor === -1 ? index : anchor;
+        const [a, b] = [from, index].sort((x, y) => x - y);
         setSelection(
           cues.slice(a, b + 1).map((c) => c.id),
           index,
@@ -247,10 +286,10 @@ export function CueTable({
         if (next.has(id)) next.delete(id);
         else next.add(id);
         setSelection([...next], index);
-        lastClick.current = index;
+        lastClick.current = id;
       } else {
         setSelection([id], index);
-        lastClick.current = index;
+        lastClick.current = id;
       }
     },
     [editor, selectedIds, setSelection],
