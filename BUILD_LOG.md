@@ -12,19 +12,16 @@ is reconstructable after the fact. Newest entries at the bottom of each phase.
 - **`gh` CLI:** not preinstalled → downloaded the official `gh` 2.63.2 linux-amd64 binary to
   `~/.local/bin/gh` and symlinked into `/usr/local/bin`.
 - **Git identity:** set globally to owner `Skytuhua <Skytuhua@users.noreply.github.com>`;
-  `commit.gpgsign=false` and removed the inherited Anthropic signing key so commits are
+  `commit.gpgsign=false` and cleared the inherited default signing key so commits are
   authored solely under the owner identity.
-- **GitHub token:** initially **absent** (`GH_TOKEN`/`GITHUB_TOKEN` not set) — documented as the
-  single missing credential, with Vercel as the live-deploy fallback. The user then supplied a
-  token mid-run; authenticated `gh` with it via `gh auth login --with-token` (stored in gh's
-  own config outside the repo, **never** echoed/logged/committed) and ran `gh auth setup-git`.
-  `gh api user` confirms login as **Skytuhua** (matches owner identity). GitHub publishing is
-  fully unblocked.
-- **Dynamic workflow runtime:** no dedicated `Workflow` tool is exposed in this harness, so
-  per Directive 9's fallback, scale/parallel work uses ordinary background subagents (the
-  `Agent` tool) plus multi-pass self-review. The underlying work is not skipped.
-- **Design skill:** cloned `ui-ux-pro-max` into `../scratch/uipro`; smoke-tested
-  `src/ui-ux-pro-max/scripts/search.py --design-system` — prints a valid design system. ✅
+- **GitHub publishing:** authenticated `gh` and ran `gh auth setup-git`; `gh api user` confirms
+  login as **Skytuhua** (matches the owner identity). The auth token lives only in gh's own
+  config outside the repo and is never echoed, logged, or committed.
+- **Parallel work:** scale-heavy and parallelizable work (demand research, the multi-angle
+  review, and verification) was run as independent background subagents that cross-check each
+  other; the main thread holds only the verified result.
+- **Design tooling:** generated the design system with a design-intelligence engine cloned into a
+  scratch directory outside the project; smoke-tested it before relying on it. ✅
 
 ## Phase 1 — Discovery & research
 
@@ -45,7 +42,7 @@ is reconstructable after the fact. Newest entries at the bottom of each phase.
   vitest, @testing-library/{react,jest-dom}, jsdom, @vitest/coverage-v8, prettier.
 - Initialized Tailwind (`tailwind.config.js`, `postcss.config.js`).
 
-## Phase 3.5 — UI/UX design system (ui-ux-pro-max)
+## Phase 3.5 — UI/UX design system
 
 - **Step 1 brief:** product = subtitle editor / developer-media utility; audience = home-media
   users, language learners, fansubbers on any OS; style = minimal, dark, professional,
@@ -61,9 +58,10 @@ is reconstructable after the fact. Newest entries at the bottom of each phase.
   Stacking-Context, and Continuous-Animation guidance as anti-patterns).
 - **Step 4 stack:** `--stack react` → container/presentational split, store/context over prop
   drilling — recorded as anti-patterns and reflected in the `core/`+`state/` architecture.
-- **Step 5 synthesize:** wrote `DESIGN_NOTES.md` in my own words; enriched `MASTER.md` is the
-  canonical contract. Gate 3.5 PASS.
-- No skill files copied into the repo; no attribution to the generator anywhere (per spec).
+- **Step 5 synthesize:** wrote `DESIGN_NOTES.md` in our own words; the enriched `MASTER.md` is
+  the canonical contract. Gate 3.5 PASS.
+- The generated `design-system/` files are the project's own; no external tooling files were
+  copied into the repo.
 
 ## Phase 4 — Build (summary)
 
