@@ -52,15 +52,24 @@ export function findReplace(
   return { subtitle, count };
 }
 
+/**
+ * Strip ASS `{...}` override blocks and HTML `<...>` tags from a single string, turning
+ * ASS `\N`/`\n` line breaks into newlines and `\h` into a space. Pure string→string so it
+ * can be used in render hot paths (e.g. the preview overlay) without allocating a Subtitle.
+ */
+export function stripDisplayTags(text: string): string {
+  return text
+    .replace(/\{[^}]*\}/g, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\\[Nnh]/g, (m) => (m === "\\h" ? " " : "\n"));
+}
+
 /** Remove HTML-style `<...>` tags and ASS `{...}` override blocks from matching cues. */
 export function stripTags(sub: Subtitle, predicate?: CuePredicate): Subtitle {
   return mapCues(
     sub,
     (c) => {
-      const text = c.text
-        .replace(/\{[^}]*\}/g, "")
-        .replace(/<[^>]*>/g, "")
-        .replace(/\\[Nnh]/g, (m) => (m === "\\h" ? " " : "\n"));
+      const text = stripDisplayTags(c.text);
       return text === c.text ? c : { ...c, text };
     },
     predicate,

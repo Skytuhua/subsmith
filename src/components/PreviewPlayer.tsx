@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import type { Cue } from "../core/types";
 import { formatSrt } from "../core/time";
-import { stripTags } from "../core/transforms/text";
+import { stripDisplayTags } from "../core/transforms/text";
 import { IconButton } from "./ui";
 
 /** Find the cue active at time `ms` (first match if cues overlap). */
@@ -42,9 +42,12 @@ export function PreviewPlayer({
 
   const activeIdx = useMemo(() => activeIndexAt(cues, time), [cues, time]);
   const activeCue = activeIdx >= 0 ? cues[activeIdx] : null;
-  const overlayText = activeCue
-    ? stripTags({ format: "srt", cues: [activeCue] }).cues[0].text
-    : "";
+  // Memoized on the active cue: while the same cue is on screen (the common case across
+  // ~60 playback frames/sec), the tag-stripping does not re-run.
+  const overlayText = useMemo(
+    () => (activeCue ? stripDisplayTags(activeCue.text) : ""),
+    [activeCue],
+  );
 
   // Report the active cue id upward for table highlighting.
   useEffect(() => {
