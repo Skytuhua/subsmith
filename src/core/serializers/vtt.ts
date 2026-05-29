@@ -1,6 +1,6 @@
 import type { SerializeOptions, Subtitle } from "../types";
 import { formatVtt } from "../time";
-import { textForBlockFormat, visibleCues } from "./srt";
+import { textForBlockFormat, visibleCues } from "./shared";
 
 /** Serialize a subtitle document to WebVTT (.vtt). */
 export function serializeVtt(
