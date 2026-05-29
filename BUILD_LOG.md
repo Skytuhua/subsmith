@@ -119,3 +119,21 @@ is reconstructable after the fact. Newest entries at the bottom of each phase.
   `CHANGELOG.md` (1.0.0), `THIRD_PARTY_NOTICES.md`. Screenshots in `docs/screenshots/`.
 - Built static `dist/` and packaged `subsmith-dist.zip`; verified it loads + runs the demo from a
   clean unzip over a plain static server (no console errors).
+
+## Phase 7 — Ship
+
+- Created public repo **github.com/Skytuhua/subsmith** (description + topics), pushed `main`.
+- Deployed live to **GitHub Pages** from a `gh-pages` branch (built `dist/`, relative `base`):
+  **https://skytuhua.github.io/subsmith/** — set as the repo homepage.
+- Cut tagged release **v1.0.0** with notes and attached the verified **subsmith-dist.zip** artifact.
+- Verified: repo files render, README displays, release asset present (1.66 MB), Pages status
+  `built`, the live URL serves the app (HTML + JS 200), and a real-browser load of the live site
+  runs the demo (8 cues, zero console errors) — screenshot `16-live-deploy.png`.
+
+## Phase 8 — Done
+
+All Definition-of-Done items met: niche, in-demand, fully-working product; pure-core unit tests
+(74) green; multi-pass + adversarial review with screenshot evidence and convergence; strong
+README + CHANGELOG + license + third-party notices; verified build artifact; public repo;
+tagged release with working artifact; live deployment. No placeholders; every advertised feature
+works.
