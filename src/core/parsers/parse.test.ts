@@ -88,6 +88,20 @@ describe("SRT parsing", () => {
     const { subtitle } = parseSrt(SRT);
     expect(serializeSrt(subtitle)).toBe(SRT);
   });
+
+  it("recovers text that appears before the timing line instead of dropping it", () => {
+    const { subtitle, warnings } = parseSrt(
+      "Some caption\n00:00:01,000 --> 00:00:02,000",
+    );
+    expect(subtitle.cues).toHaveLength(1);
+    expect(subtitle.cues[0].text).toBe("Some caption");
+    expect(warnings.length).toBeGreaterThan(0);
+  });
+
+  it("does not warn on a normal index-then-timing block", () => {
+    const { warnings } = parseSrt("7\n00:00:01,000 --> 00:00:02,000\nHi");
+    expect(warnings).toHaveLength(0);
+  });
 });
 
 describe("VTT parsing", () => {
