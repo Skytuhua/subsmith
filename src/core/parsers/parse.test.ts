@@ -150,6 +150,28 @@ describe("ASS parsing", () => {
   });
 });
 
+describe("serializer options", () => {
+  it("prepends a UTF-8 BOM when requested, across formats", () => {
+    const { subtitle } = parseSrt(SRT);
+    expect(serializeSrt(subtitle, { bom: true }).startsWith("﻿")).toBe(true);
+    expect(serializeSrt(subtitle, { bom: false }).startsWith("﻿")).toBe(
+      false,
+    );
+    expect(serializeVtt(subtitle, { bom: true }).startsWith("﻿")).toBe(
+      true,
+    );
+    expect(serializeAss(subtitle, { bom: true }).startsWith("﻿")).toBe(
+      true,
+    );
+  });
+  it("emits CRLF line endings when requested and no lone LF remains", () => {
+    const { subtitle } = parseSrt(SRT);
+    const out = serializeSrt(subtitle, { eol: "\r\n" });
+    expect(out).toContain("\r\n");
+    expect(out.replace(/\r\n/g, "").includes("\n")).toBe(false);
+  });
+});
+
 describe("format conversion", () => {
   it("converts ASS to SRT, stripping override tags", () => {
     const withTags = ASS.replace("Hello world", "{\\an8}Hello world");
