@@ -69,6 +69,23 @@ describe("lint", () => {
     expect(f.some((x) => x.rule === "too-short")).toBe(true);
   });
 
+  it("flags too-long display time", () => {
+    const f = lint(sub([[0, 8000, "hello"]])); // 8s > 7s default max
+    expect(f.some((x) => x.rule === "too-long")).toBe(true);
+  });
+
+  it("flags fast reading speed", () => {
+    const f = lint(sub([[0, 1000, "this is a fairly long line of text"]]));
+    expect(f.some((x) => x.rule === "fast-reading")).toBe(true);
+  });
+
+  it("does not flag fast-reading when visible text is short after tag-stripping", () => {
+    // Raw length > 10, but visibleLength <= 10 once {…} overrides are stripped, so the
+    // two-condition guard (cps > max AND visibleLength > 10) must not fire.
+    const f = lint(sub([[0, 1000, "{\\b1}hi{\\b0}"]]));
+    expect(f.some((x) => x.rule === "fast-reading")).toBe(false);
+  });
+
   it("summarizes severities", () => {
     const f = lint(
       sub([
@@ -80,6 +97,21 @@ describe("lint", () => {
     const s = summarize(f);
     expect(s.total).toBe(f.length);
     expect(s.errors).toBeGreaterThan(0);
+  });
+
+  it("counts infos, warnings and errors distinctly", () => {
+    const f = lint(
+      sub([
+        [2000, 1000, "neg"], // negative-duration -> error
+        [0, 300, "x"], // too-short -> info
+        [0, 1000, ""], // empty-text -> warning
+      ]),
+    );
+    const s = summarize(f);
+    expect(s.errors).toBeGreaterThan(0);
+    expect(s.warnings).toBeGreaterThan(0);
+    expect(s.infos).toBeGreaterThan(0);
+    expect(s.total).toBe(s.errors + s.warnings + s.infos);
   });
 });
 

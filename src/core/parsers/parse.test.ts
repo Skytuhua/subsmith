@@ -119,6 +119,11 @@ describe("VTT parsing", () => {
     const reparsed = parseVtt(out);
     expect(reparsed.subtitle.cues).toHaveLength(2);
     expect(reparsed.subtitle.cues[0].vtt?.settings).toBe("line:0 position:50%");
+    // Verify timing and text survive serialization, not just the cue count/settings.
+    expect(reparsed.subtitle.cues[0].start).toBe(1000);
+    expect(reparsed.subtitle.cues[0].end).toBe(4000);
+    expect(reparsed.subtitle.cues[0].text).toBe("Hello world");
+    expect(reparsed.subtitle.cues[1].vtt?.id).toBe("cue-2");
   });
 });
 

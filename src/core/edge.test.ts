@@ -116,6 +116,47 @@ describe("ASS robustness", () => {
     expect(parseAss(serializeAss(subtitle)).subtitle.cues[0].text).toBe("a, b, c");
   });
 
+  it("skips an event with unparseable timing but keeps valid ones", () => {
+    const ass = [
+      "[Events]",
+      "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+      "Dialogue: 0,NOTATIME,0:00:02.00,Default,,0,0,0,,bad",
+      "Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,good",
+    ].join("\n");
+    const { subtitle, warnings } = parseAss(ass);
+    expect(subtitle.cues).toHaveLength(1);
+    expect(subtitle.cues[0].text).toBe("good");
+    const bad = warnings.find((w) => /bad timing/i.test(w.message));
+    expect(bad).toBeTruthy();
+    expect(typeof bad?.line).toBe("number");
+  });
+
+  it("warns when the Format line is missing Start/End/Text", () => {
+    const ass = [
+      "[Events]",
+      "Format: Layer, Start, End",
+      "Dialogue: 0,0:00:01.00,0:00:02.00",
+    ].join("\n");
+    const { warnings } = parseAss(ass);
+    expect(
+      warnings.some((w) => /missing Start\/End\/Text/.test(w.message)),
+    ).toBe(true);
+  });
+
+  it("synthesizes a Format line and still parses when [Events] has none", () => {
+    const ass = [
+      "[Script Info]",
+      "Title: X",
+      "",
+      "[Events]",
+      "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hi there",
+    ].join("\n");
+    const { subtitle } = parseAss(ass);
+    expect(subtitle.cues).toHaveLength(1);
+    expect(subtitle.cues[0].text).toBe("Hi there");
+    expect(subtitle.assHeader).toContain("Format:");
+  });
+
   it("drops ASS Comment events when converting to SRT/VTT but keeps them in ASS", () => {
     const ass = [
       "[Events]",

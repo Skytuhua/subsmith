@@ -142,6 +142,22 @@ describe("text operations", () => {
     const s = stripTags(sub([[0, 1, "<i>hi</i> {\\an8}there"]]));
     expect(s.cues[0].text).toBe("hi there");
   });
+  it("converts ASS hard-space and line-break escapes", () => {
+    const s = stripTags(sub([[0, 1, "word1\\hword2\\Nword3"]]));
+    expect(s.cues[0].text).toBe("word1 word2\nword3");
+  });
+  it("honors the caseSensitive option", () => {
+    const cs = findReplace(sub([[0, 1, "Hello hello"]]), "Hello", "X", {
+      caseSensitive: true,
+    });
+    expect(cs.count).toBe(1);
+    expect(cs.subtitle.cues[0].text).toBe("X hello");
+    const ci = findReplace(sub([[0, 1, "Hello hello"]]), "Hello", "X", {
+      caseSensitive: false,
+    });
+    expect(ci.count).toBe(2);
+    expect(ci.subtitle.cues[0].text).toBe("X X");
+  });
   it("trims and collapses whitespace", () => {
     const s = trimWhitespace(sub([[0, 1, "  hello   world  \n  next "]]));
     expect(s.cues[0].text).toBe("hello world\nnext");

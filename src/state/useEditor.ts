@@ -9,7 +9,7 @@ const MAX_HISTORY = 100;
  * Undo depth, scaled down for large documents. Timing transforms allocate a fresh object
  * per cue, so retaining 100 snapshots of a multi-thousand-cue file would waste memory.
  */
-function historyLimit(doc: Subtitle | null): number {
+export function historyLimit(doc: Subtitle | null): number {
   const n = doc?.cues.length ?? 0;
   if (n > 5000) return 10;
   if (n > 1500) return 30;
@@ -32,7 +32,7 @@ export interface EditorState {
   lastOp: string | null;
 }
 
-const initialState: EditorState = {
+export const initialState: EditorState = {
   doc: null,
   past: [],
   future: [],
@@ -66,7 +66,8 @@ type Action =
   | { type: "SET_EXPORT_FORMAT"; format: SubtitleFormat }
   | { type: "CLEAR" };
 
-function reducer(state: EditorState, action: Action): EditorState {
+/** Exported for unit testing — a pure (state, action) => state function. */
+export function reducer(state: EditorState, action: Action): EditorState {
   switch (action.type) {
     case "LOAD":
       return {
