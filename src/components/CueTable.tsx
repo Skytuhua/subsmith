@@ -21,21 +21,41 @@ function TimeInput({
   ariaLabel: string;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const [parseError, setParseError] = useState(false);
   const display = draft ?? formatSrt(valueMs);
+  // `invalid` flags a negative duration (cross-field); `parseError` flags an unparseable
+  // value just typed into THIS field. Either should read as invalid to AT and the eye.
+  const showInvalid = invalid || parseError;
 
   const commit = () => {
     if (draft === null) return;
     const ms = parseTimecode(draft);
-    if (ms !== null) onCommit(ms);
+    if (ms === null) {
+      // Keep an unparseable draft visible (flagged) instead of silently reverting it, so
+      // the user can see and correct their typo. An empty field just reverts.
+      if (draft.trim() !== "") {
+        setParseError(true);
+        return;
+      }
+      setDraft(null);
+      return;
+    }
+    onCommit(ms);
     setDraft(null);
+    setParseError(false);
   };
 
   return (
     <input
       aria-label={ariaLabel}
+      aria-invalid={showInvalid || undefined}
+      title={parseError ? "Use hh:mm:ss,mmm (or .mmm) format" : undefined}
       inputMode="numeric"
       value={display}
-      onChange={(e) => setDraft(e.target.value)}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        setParseError(false);
+      }}
       onFocus={(e) => e.currentTarget.select()}
       onBlur={commit}
       onKeyDown={(e) => {
@@ -43,13 +63,14 @@ function TimeInput({
           e.currentTarget.blur();
         } else if (e.key === "Escape") {
           setDraft(null);
+          setParseError(false);
           e.currentTarget.blur();
         }
       }}
       className={cn(
         "w-[7.5rem] rounded-sm border bg-background/40 px-1.5 py-1 text-center font-mono text-xs tabular-nums text-foreground",
         "transition-colors duration-150 focus:border-accent",
-        invalid
+        showInvalid
           ? "border-destructive text-destructive"
           : "border-transparent hover:border-border",
       )}
@@ -156,27 +177,19 @@ const CueRow = memo(function CueRow({
         )}
       />
 
-      {/* Row actions. */}
-      <div className="col-start-2 flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 sm:col-start-4">
-        <IconButton
-          label="Duplicate cue"
-          onClick={() => onDuplicate(index)}
-          className="h-7 w-7"
-        >
+      {/* Row actions. Always visible on touch (mobile), hover/focus-reveal on sm+ pointers —
+          otherwise touch users had no way to duplicate/split/delete a single cue. */}
+      <div className="col-start-2 flex items-center gap-0.5 opacity-100 sm:col-start-4 sm:opacity-0 sm:transition-opacity sm:focus-within:opacity-100 sm:group-hover:opacity-100">
+        <IconButton label="Duplicate cue" onClick={() => onDuplicate(index)}>
           <Copy className="h-3.5 w-3.5" aria-hidden />
         </IconButton>
-        <IconButton
-          label="Split cue"
-          onClick={() => onSplit(index)}
-          className="h-7 w-7"
-        >
+        <IconButton label="Split cue" onClick={() => onSplit(index)}>
           <Scissors className="h-3.5 w-3.5" aria-hidden />
         </IconButton>
         <IconButton
           label="Delete cue"
           onClick={() => onDelete(cue.id)}
           variant="destructive"
-          className="h-7 w-7"
         >
           <Trash2 className="h-3.5 w-3.5" aria-hidden />
         </IconButton>
@@ -214,11 +227,14 @@ export function CueTable({
     getItemKey: (i) => doc.cues[i].id,
   });
 
-  // Scroll to a cue when a lint finding is clicked.
+  // Scroll to a cue when a lint finding is clicked. Intentionally fires only when jumpNonce
+  // changes (each click is a fresh jump request, even to the same index): jumpIndex is a
+  // prop so the closure always reads its current value, EditorView sets index+nonce together
+  // (EditorView.tsx), and virtualizer is a stable ref — so omitting them is safe, not stale.
   useEffect(() => {
     if (jumpIndex == null) return;
     virtualizer.scrollToIndex(jumpIndex, { align: "center" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce is the deliberate trigger (see above)
   }, [jumpNonce]);
 
   const patch = useCallback(
