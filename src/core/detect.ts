@@ -1,5 +1,3 @@
-import jschardet from "jschardet";
-
 /** A text encoding the user can pick from the manual override dropdown. */
 export interface EncodingOption {
   /** TextDecoder label. */
@@ -80,8 +78,16 @@ export function normalizeEncoding(name: string | null | undefined): string {
   return "utf-8";
 }
 
-/** Detect the encoding of a byte buffer using BOM sniffing then jschardet. */
-export function detectEncoding(bytes: Uint8Array): DetectedEncoding {
+/**
+ * Detect the encoding of a byte buffer using BOM sniffing then jschardet.
+ *
+ * Async because jschardet (its ~120 kB of charset models) is loaded lazily via dynamic
+ * import — it is kept out of the initial bundle and only fetched the first time content
+ * actually needs charset detection. The synchronous BOM fast path never loads it.
+ */
+export async function detectEncoding(
+  bytes: Uint8Array,
+): Promise<DetectedEncoding> {
   // BOM sniffing is authoritative.
   if (
     bytes.length >= 3 &&
@@ -105,6 +111,7 @@ export function detectEncoding(bytes: Uint8Array): DetectedEncoding {
     bin += String.fromCharCode(sample[i]);
   let result: { encoding: string | null; confidence: number };
   try {
+    const { default: jschardet } = await import("jschardet");
     result = jschardet.detect(bin);
   } catch {
     result = { encoding: "utf-8", confidence: 0 };
@@ -133,11 +140,15 @@ export interface LoadedText {
   fromBom: boolean;
 }
 
-/** Detect the encoding and decode in one step. */
-export function detectAndDecode(
+/**
+ * Detect the encoding and decode in one step. Async because {@link detectEncoding} lazily
+ * imports jschardet. The `override` path is allocation-cheap and never loads jschardet, but
+ * still returns a promise for a single, consistent call signature.
+ */
+export async function detectAndDecode(
   bytes: Uint8Array,
   override?: string,
-): LoadedText {
+): Promise<LoadedText> {
   if (override) {
     return {
       text: decodeText(bytes, override),
@@ -146,7 +157,7 @@ export function detectAndDecode(
       fromBom: false,
     };
   }
-  const det = detectEncoding(bytes);
+  const det = await detectEncoding(bytes);
   return {
     text: decodeText(bytes, det.encoding),
     encoding: det.encoding,

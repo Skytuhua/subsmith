@@ -9,9 +9,10 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   build: {
-    // jschardet ships sizeable charset models; the gzipped bundle (~200 kB) is fine for a
-    // tool that loads once and runs entirely offline thereafter.
-    chunkSizeWarningLimit: 700,
+    // jschardet ships sizeable charset models, but it is now loaded lazily (dynamic import
+    // in src/core/detect.ts) so it lands in its own chunk instead of the entry bundle. The
+    // default 500 kB warning threshold is fine again now that the main chunk is ~90 kB gzip.
+    chunkSizeWarningLimit: 500,
   },
   test: {
     globals: true,

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useReducer } from "react";
 import type { ParseWarning, Subtitle, SubtitleFormat } from "../core/types";
 import { parse } from "../core/parsers";
-import { detectAndDecode } from "../core/detect";
+import { detectAndDecode, decodeText } from "../core/detect";
 
 const MAX_HISTORY = 100;
 
@@ -99,11 +99,13 @@ function reducer(state: EditorState, action: Action): EditorState {
       return { ...state, doc: next, past, future: [], lastOp: action.label };
     }
     case "REDECODE": {
-      // Re-decoding the original bytes replaces the document and resets history.
+      // Re-decoding the original bytes replaces the document and resets history. The
+      // encoding is always an explicit override here, so decode synchronously — jschardet
+      // is never needed and the reducer stays pure (no async).
       if (!state.rawBytes) return state;
-      const decoded = detectAndDecode(state.rawBytes, action.encoding);
+      const text = decodeText(state.rawBytes, action.encoding);
       const { subtitle, warnings } = parse(
-        decoded.text,
+        text,
         undefined,
         state.fileName ?? undefined,
       );
@@ -167,7 +169,7 @@ export interface EditorApi {
     bytes: Uint8Array,
     fileName: string,
     encodingOverride?: string,
-  ) => void;
+  ) => Promise<void>;
   /** Load plain text (e.g. the built-in demo) directly. */
   loadText: (text: string, fileName: string, format?: SubtitleFormat) => void;
   /** Apply a pure transform to the current document, recording one undo step. */
@@ -187,8 +189,8 @@ export function useEditor(): EditorApi {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   const loadBytes = useCallback(
-    (bytes: Uint8Array, fileName: string, encodingOverride?: string) => {
-      const decoded = detectAndDecode(bytes, encodingOverride);
+    async (bytes: Uint8Array, fileName: string, encodingOverride?: string) => {
+      const decoded = await detectAndDecode(bytes, encodingOverride);
       const { subtitle, warnings } = parse(decoded.text, undefined, fileName);
       dispatch({
         type: "LOAD",

@@ -24,7 +24,7 @@ function Workbench() {
       }
       try {
         const bytes = await readFileBytes(file);
-        editor.loadBytes(bytes, file.name);
+        await editor.loadBytes(bytes, file.name);
       } catch {
         notify("Could not read that file.", "error");
       }

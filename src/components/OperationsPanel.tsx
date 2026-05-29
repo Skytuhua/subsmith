@@ -561,7 +561,7 @@ function MergePanel({ editor }: { editor: EditorApi }) {
     const file = files[0];
     try {
       const bytes = await readFileBytes(file);
-      const decoded = detectAndDecode(bytes);
+      const decoded = await detectAndDecode(bytes);
       const { subtitle } = parse(decoded.text, undefined, file.name);
       setAddition({ name: file.name, sub: subtitle });
     } catch {
