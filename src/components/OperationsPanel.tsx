@@ -665,6 +665,7 @@ function LintPanel({
       title="Validate"
       icon={<ListChecks className="h-4 w-4" />}
       badge={badge}
+      defaultOpen
     >
       {summary.total === 0 ? (
         <p className="text-sm text-accent">No timing or text issues found.</p>
@@ -721,9 +722,9 @@ function LintPanel({
             </Button>
           </div>
           <ul className="max-h-56 space-y-1 overflow-y-auto pr-1">
-            {findings.slice(0, 200).map((f, i) => (
+            {findings.slice(0, 200).map((f) => (
               <FindingRow
-                key={i}
+                key={`${f.cueId}-${f.rule}`}
                 finding={f}
                 onClick={() => {
                   editor.setSelection([f.cueId], f.cueIndex);
