@@ -9,6 +9,7 @@ import {
   Combine,
   ListChecks,
   ArrowRight,
+  SeparatorHorizontal,
 } from "lucide-react";
 import type { CuePredicate } from "../core/transforms/common";
 import { shift } from "../core/transforms/shift";
@@ -24,6 +25,7 @@ import {
   fixMojibakeAll,
 } from "../core/transforms/text";
 import { merge } from "../core/transforms/merge";
+import { setMinGap } from "../core/transforms/gap";
 import { parse } from "../core/parsers";
 import { detectAndDecode } from "../core/detect";
 import {
@@ -93,6 +95,7 @@ export function OperationsPanel({
       <ScalePanel editor={editor} predicate={predicate} />
       <FindReplacePanel editor={editor} predicate={predicate} />
       <CleanupPanel editor={editor} predicate={predicate} />
+      <GapPanel editor={editor} />
       <MergePanel editor={editor} />
       <LintPanel editor={editor} onJumpTo={onJumpTo} />
     </div>
@@ -562,6 +565,45 @@ function CleanupPanel({ editor, predicate }: PanelProps) {
           }
         >
           Remove empty cues
+        </Button>
+      </div>
+    </Panel>
+  );
+}
+
+function GapPanel({ editor }: { editor: EditorApi }) {
+  const { notify } = useToast();
+  const [gap, setGap] = useState("80");
+  const apply = () => {
+    const ms = Math.round(parseFloat(gap));
+    if (!(ms >= 0)) {
+      notify("Enter a non-negative gap in milliseconds.", "error");
+      return;
+    }
+    editor.apply((d) => setMinGap(d, ms), `Min gap ${ms}ms`);
+    notify(`Enforced a ${ms} ms minimum gap between cues.`);
+  };
+  return (
+    <Panel
+      title="Minimum gap"
+      icon={<SeparatorHorizontal className="h-4 w-4" />}
+    >
+      <p className="text-xs text-muted-fg/80">
+        Trim cue ends so consecutive subtitles never touch — a clean, readable gap (handy
+        after a sync or frame-rate pass leaves cues butting together).
+      </p>
+      <div className="flex items-end gap-2">
+        <Field label="Gap (ms)">
+          <TextInput
+            type="number"
+            step="10"
+            min="0"
+            value={gap}
+            onChange={(e) => setGap(e.target.value)}
+          />
+        </Field>
+        <Button variant="primary" onClick={apply}>
+          Apply
         </Button>
       </div>
     </Panel>

@@ -13,6 +13,7 @@ import {
   fixMojibakeAll,
 } from "./text";
 import { merge } from "./merge";
+import { setMinGap } from "./gap";
 
 function sub(cues: Array<[number, number, string]>): Subtitle {
   return {
@@ -161,6 +162,52 @@ describe("text operations", () => {
     // "Ã©" is the UTF-8 bytes of "é" misread as Latin-1.
     const s = fixMojibakeAll(sub([[0, 1, "cafÃ©"]]));
     expect(s.cues[0].text).toBe("café");
+  });
+});
+
+describe("minimum gap", () => {
+  it("trims an earlier cue's end so the gap to the next is at least gapMs", () => {
+    const s = setMinGap(
+      sub([
+        [0, 1000, "a"],
+        [1100, 2000, "b"],
+      ]),
+      200,
+    );
+    expect(s.cues[0].end).toBe(900); // 1100 - 200
+    expect(s.cues[1].start).toBe(1100);
+  });
+  it("is order-independent (sorts first)", () => {
+    const s = setMinGap(
+      sub([
+        [2000, 3000, "b"],
+        [0, 1900, "a"],
+      ]),
+      100,
+    );
+    expect(s.cues.map((c) => c.text)).toEqual(["a", "b"]);
+    expect(s.cues[0].end).toBe(1900); // already exactly 100 ms before b.start
+  });
+  it("clamps a trimmed end so it never precedes the cue's own start", () => {
+    const s = setMinGap(
+      sub([
+        [500, 5000, "a"],
+        [600, 2000, "b"],
+      ]),
+      200,
+    );
+    expect(s.cues[0].end).toBe(500); // limit 400 < start 500 → clamp to start
+    expect(s.cues[0].end).toBeGreaterThanOrEqual(s.cues[0].start);
+  });
+  it("leaves an already-spaced document untouched in timings", () => {
+    const s = setMinGap(
+      sub([
+        [0, 1000, "a"],
+        [3000, 4000, "b"],
+      ]),
+      100,
+    );
+    expect(s.cues[0].end).toBe(1000);
   });
 });
 
